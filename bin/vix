@@ -1,0 +1,37 @@
+#!/usr/bin/perl
+use strict;
+use FileHandle;
+for my $a (@ARGV) {
+    if($a =~ m{(.*?):(\d+)}) {
+        my ($file,$line)=(fix_file($1),$2);
+        system("/usr/bin/vim +$line $file");
+    } elsif($a =~ m{(.*?):}) {
+        my $file = fix_file($1);
+        system("/usr/bin/vim $file");
+    } else {
+        system("/usr/bin/vim @ARGV");
+    }
+}
+
+sub fix_file
+{
+  my $file = shift;
+  if($file =~ m{/configs/[^/]*/build/([^/]*)/(.*)}) {
+    my ($pre,$thorn,$src) = ($`,$1,$2);
+    my $arr = $pre."/arrangements";
+    my $dd = new FileHandle;
+    opendir($dd,$arr) or die $arr;
+    while(my $f = readdir($dd)) {
+      my $test = $arr . "/" . $f . "/" . $thorn . "/src/" . $src;
+      print "test=$test\n";
+      if(-r $test) {
+        return $test;
+      }
+    }
+    #die "not found: $file";
+    print "not found in source tree: $file\n";
+    return $file;
+  } else {
+    return $file;
+  }
+}

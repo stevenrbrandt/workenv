@@ -1,0 +1,25 @@
+#!/usr/bin/python
+import os
+import sys
+import subprocess
+
+def call_git(h,t):
+  if os.path.exists(os.path.join(h,".git")):
+    print "Found git! "
+    args = ["git","diff"]
+    args += sys.argv[1:-1]
+    args += [t]
+    print 'Cmd=',args,'At=',h
+    subprocess.call(args,cwd=h)
+  elif h == None:
+    print "Git repo not found"
+  elif h == "":
+    print "Git repo not found"
+  else:
+    h2,t2 = os.path.split(h)
+    print 'h2=%s,t2=%s' % (h2,t2)
+    call_git(h2,os.path.join(t2,t))
+
+h,t = os.path.split(os.path.realpath(sys.argv[-1]))
+print 'h=%s,t=%s' % (h,t)
+call_git(h,t)

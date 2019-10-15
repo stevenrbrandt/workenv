@@ -1,0 +1,119 @@
+#!/usr/bin/perl
+# Steve's Grep
+# Author: Steven R. Brandt
+# Web Page: http://cct.lsu.edu/~sbrandt/
+use strict;
+use FileHandle;
+
+my %files = ();
+my $ic = 0;
+my $lc = 0;
+my $verbose = 0;
+my $hidden = 0;
+my $exclude = 0;
+my $color = 0;
+my $symlink = 0;
+my %dirs = ("."=>1,".."=>1,".svn"=>1,"CVS"=>1);
+while($ARGV[0] =~ /^-/) {
+    my $a=shift @ARGV;
+    if($a eq "-i") { # same as grep
+        $ic++;
+    } elsif($a =~ /-d=(.*)/) {
+        $dirs{$1}++;
+    } elsif($a eq "-c") {
+        $color++;
+    } elsif($a eq "-h") {
+        $hidden++;
+    } elsif($a eq "-x") {
+        $exclude++;
+    } elsif($a eq "-V") { 
+        $verbose++;
+    } elsif($a =~ /-v=(.*)/) {
+        $dirs{$1}++;
+    } elsif($a eq "-s") {
+        $symlink++;
+    } elsif($a eq "-l") { # same grep
+        $lc++;
+    } elsif($a eq "-h" or $a eq "-help" or $a eq "--help" or $a eq "-?") {
+        die "usage: sgrep [-h] [-i] [-l] suffix,... pattern [files]"
+    }
+}
+
+my $suffix = shift @ARGV;
+$suffix =~ s/,/\|/g; # make the suffix regex
+my $needle = shift @ARGV;
+
+# If no files are given, use the current dir
+if($#ARGV < 0) {
+    push @ARGV, ".";
+}
+
+for my $a (@ARGV) {
+    $a =~ s{/+$}{};
+    do_search($suffix,$needle,$a);
+}
+print join("\n",keys %files),"\n";
+
+sub do_search {
+    my $suffix = shift;
+    my $needle = shift;
+    my $file = shift;
+    return if(!$hidden and $file =~ /\/\.[^\/]+$/);
+    print "file=$file\n" if($verbose);
+    if(!$symlink and -l $file) {
+        return;
+    } elsif(-d $file) {
+        my $dd = new FileHandle;
+        my @dlist = ();
+        opendir($dd,$file) or die "could not read dir $file";
+        while(my $entry = readdir($dd)) {
+            # directories to avoid recursing into
+            next if(defined($dirs{$entry}));
+
+            my $f = "$file/$entry";
+            $dlist[$#dlist+1]=$f;
+        }
+        closedir($dd);
+        for my $f (@dlist) {
+            do_search($suffix,$needle,$f);
+        }
+    #} elsif(-r $file and $file !~ /\.(odt|ppt|pptx|doc|docx|jpg|png|gif|jpeg|o|class|jar|a|so)$/i and (($suffix eq "any" ) or $file =~ /\.($suffix)$/) and -T $file) {
+#    } elsif(-r $file and $file =~ /\.pdf$/i) {
+#        system("pdftotext - $ENV{HOME}/pdf.tmp < '$file' 2>$ENV{HOME}/pdf.err");
+#        my $suffix_save = $suffix;
+#        $suffix = "tmp";
+#        print "CALLING ",$ENV{HOME}."/pdf.tmp $suffix_save\n";
+#        do_search($ENV{HOME}."/pdf.tmp");
+#        $suffix = $suffix_save;
+    } elsif(-r $file and (($suffix eq "any" ) or ($exclude and $file !~/\.($suffix)$/) or (!$exclude and $file =~ /\.($suffix)$/)) and -T $file) {
+        my $fd = new FileHandle;
+        if($file =~ /\.pdf$/i) {
+            next;
+            #system("pdftotext - $ENV{HOME}/pdf.tmp < '$file' 2>$ENV{HOME}/pdf.err");
+            #print ("pdftotext - $ENV{HOME}/pdf.tmp < '$file' 2>$ENV{HOME}/pdf.err\n");
+            #$file = "$ENV{HOME}/pdf.tmp";
+        }
+        open($fd,$file) or die "could not open $file";
+        my $line=1;
+        if($ic) { # ignore case
+            while(<$fd>) {
+                if(/$needle/i) {
+                    print "$file:$line: $_" unless($lc);
+                    print "$file:$line: pat=$&\n" if($color);
+                    $files{$file}++ if($lc);
+                }
+                $line++;
+            }
+        } else { # no ignore case
+            while(<$fd>) {
+                if(/$needle/) {
+                    print "$file:$line: $_" unless($lc);
+                    print "$file:$line: pat=$&\n" if($color);
+                    $files{$file}++ if($lc);
+                }
+                $line++;
+            }
+        }
+        close($fd);
+    }
+}

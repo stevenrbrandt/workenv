@@ -1,0 +1,9 @@
+if [ -e /tmp/stop_diff ]
+then
+  echo "changed: $5"
+else
+  vimdiff -c 'set diffopt-=iwhite' "$5" "$2"
+  #vimdiff "$5" "$2"
+fi
+#echo  $* > /tmp/diff.txt
+#diff -Z "$5" "$2"

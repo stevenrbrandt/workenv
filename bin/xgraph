@@ -1,0 +1,98 @@
+#!/usr/bin/python3
+import matplotlib.pyplot as plt
+import sys
+import numpy as np
+import re
+import os
+from math import log
+from getopt import getopt
+
+lnx = False
+lny = False
+m = False
+M = False
+xlim = None
+ylim = None
+col = 1
+
+opts, files = getopt(sys.argv[1:],":mM",["lx","ly","loc=",'col='])
+
+loc = "best"
+
+for o,a in opts:
+    if o == "--lx":
+        lnx = True
+    elif o == "--ly":
+        lny = True
+    elif o == "-m":
+        m = True
+    elif o == "-M":
+        M = True
+    elif o == "--col":
+        col = int(a)
+    elif o == "--loc":
+        loc = a
+
+xmin, xmax = None, None
+ymin, ymax = None, None
+
+ddata = {}
+for a in files:
+    try:
+        raw = np.genfromtxt(a)
+    except:
+        print("Bad data in file:",a)
+        sys.exit(1)
+    ddata[a] = raw
+    xmin_ = np.min(raw[:,0])
+    xmax_ = np.max(raw[:,0])
+    ymin_ = np.min(raw[:,col])
+    ymax_ = np.max(raw[:,col])
+    print(col,ymin_,ymax_)
+    if xmin is None:
+        xmin = xmin_
+        xmax = xmax_
+        ymin = ymin_
+        ymax = ymax_
+    else:
+        xmin = min(xmin,xmin_)
+        ymin = min(ymin,ymin_)
+        xmax = max(xmax,xmax_)
+        ymax = max(ymax,ymax_)
+
+for a in files:
+    g = re.match(r'data-(\d+)-(\d+)\.x',a)
+    fac = 1
+    xfac = 1
+    yfac = 1
+    if g:
+        fac = int(g.group(1))
+        xfac = fac *log(log(fac))
+        yfac = fac
+    data = np.genfromtxt(a)
+    xv = data[:,0]/xfac
+    yv = data[:,col]/yfac
+#    if lnx:
+#        xv = np.log(data[:,0]/xfac)
+#    else:
+#        xv = data[:,0]/xfac
+#    if lny:
+#        yv = np.log(data[:,1]/yfac)
+#    else:
+#        yv = data[:,1]/yfac
+    if lnx and lny:
+        pfun = plt.loglog
+    elif lnx:
+        pfun = plt.semilogx
+    elif lny:
+        pfun = plt.semilogy
+    else:
+        pfun = plt.plot
+    if m:
+        pfun(xv,yv,'o',label=a)
+    elif M:
+        pfun(xv,yv,'o-',label=a)
+    else:
+        pfun(xv,yv,label=a)
+    plt.legend(loc=loc)
+plt.show()
