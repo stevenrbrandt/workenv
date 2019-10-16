@@ -30,12 +30,124 @@ if not os.path.exists(vimrc):
     with open(vimrc,"w") as fd:
         print("""
 set ai nu ic sw=4 ts=4 expandtab
-colorscheme elflord
+colorscheme torture
 syn on
 if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif
 endif
 """.format(here=here),file=fd)
+
+vim_dir = os.path.join(home, ".vim", "colors")
+os.mkdirs(vim_dir, exists_ok=True)
+torture = os.path.join(vim_dir, "torture.vim")
+
+if not os.path.exists(torture):
+    with open(torture,"w") as fd:
+        print("""
+" Vim color file
+" Maintainer:   Your name <youremail@something.com>
+" Last Change:  
+" URL:		
+
+" cool help screens
+" :he group-name
+" :he highlight-groups
+" :he cterm-colors
+
+" your pick:
+set background=light
+hi clear
+if exists("syntax_on")
+    syntax reset
+endif
+let g:colors_name="torture"
+
+"hi Normal
+
+" OR
+
+" highlight clear Normal
+" set background&
+" highlight clear
+" if &background == "light"
+"   highlight Error ...
+"   ...
+" else
+"   highlight Error ...
+"   ...
+" endif
+
+" A good way to see what your colorscheme does is to follow this procedure:
+" :w 
+" :so % 
+"
+" Then to see what the current setting is use the highlight command.  
+" For example,
+" 	:hi Cursor
+" gives
+"	Cursor         xxx guifg=bg guibg=fg 
+ 	
+" Uncomment and complete the commands you want to change from the default.
+
+"hi Cursor		
+"hi CursorIM	
+"hi Directory	
+"See https://github.com/guns/xterm-color-table.vim
+hi DiffAdd guifg=gray guibg=blue
+hi DiffAdd ctermfg=24 ctermbg=156
+hi DiffChange guifg=white guibg=black
+hi DiffChange ctermfg=white ctermbg=black
+hi DiffText guifg=green guibg=black
+hi DiffText ctermfg=green ctermbg=black
+hi italics  guifg=darkblue guibg=green
+hi italics  ctermfg=darkblue ctermbg=green
+hi quote guifg=green guibg=green
+hi quote ctermfg=black ctermbg=green
+hi quoteerror ctermfg=black ctermbg=red
+hi quixote ctermfg=black ctermbg=cyan
+hi letter_a ctermfg=black ctermbg=cyan
+"hi DiffDelete	
+"hi DiffText	
+"hi ErrorMsg	
+"hi VertSplit	
+"hi Folded		
+"hi FoldColumn	
+"hi IncSearch	
+"hi LineNr		
+"hi ModeMsg		
+"hi MoreMsg		
+"hi NonText		
+"hi Question	
+"hi Search		
+"hi SpecialKey	
+"hi StatusLine	
+"hi StatusLineNC	
+"hi Title		
+"hi Visual		
+"hi VisualNOS	
+"hi WarningMsg	
+"hi WildMenu	
+"hi Menu		
+"hi Scrollbar	
+"hi Tooltip		
+
+" syntax highlighting groups
+" term=bold,standout,underline,reverse
+hi Comment ctermfg=lightblue term=bold
+hi Comment guifg=lightblue term=bold
+"hi Constant	
+"hi Identifier	
+"hi Statement ctermfg=royalblue term=bold
+hi Statement guifg=olivedrab3 term=bold
+"hi PreProc	
+"hi Type		
+"hi Special	
+"hi Underlined	
+"hi Ignore		
+"hi Error		
+"hi Todo	ctermbg=red term=bold
+hi Todo term=standout ctermbg=Yellow ctermfg=Black guifg=Blue guibg=Yellow
+""")
 
 gitconf = os.path.join(home,".gitconfig")
 if not os.path.exists(gitconf):

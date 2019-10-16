@@ -1,0 +1,16 @@
+#!/usr/bin/perl
+my @cmd = ("/usr/bin/gdb");
+my $cmd = $ARGV[0];
+$ARGV[0] = "run";
+my $run = join(" ",@ARGV);
+push @cmd, "--eval-command=set logging file debug-$$.out";
+push @cmd, "--eval-command=set logging on";
+push @cmd, "--eval-command=b abort";
+push @cmd, "--eval-command=b exit";
+push @cmd, "--eval-command=$run";
+push @cmd, "--eval-command=where";
+push @cmd, "--eval-command=quit";
+push @cmd, $cmd;
+print join(" ",@cmd),"\n";
+close(STDIN);
+exec(@cmd);
