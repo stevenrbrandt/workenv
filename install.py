@@ -147,7 +147,7 @@ hi Statement guifg=olivedrab3 term=bold
 "hi Error		
 "hi Todo	ctermbg=red term=bold
 hi Todo term=standout ctermbg=Yellow ctermfg=Black guifg=Blue guibg=Yellow
-""")
+""",file=fd)
 
 gitconf = os.path.join(home,".gitconfig")
 if not os.path.exists(gitconf):
