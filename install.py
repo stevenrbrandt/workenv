@@ -38,7 +38,7 @@ endif
 """.format(here=here),file=fd)
 
 vim_dir = os.path.join(home, ".vim", "colors")
-os.makedirs(vim_dir, exists_ok=True)
+os.makedirs(vim_dir, exist_ok=True)
 torture = os.path.join(vim_dir, "torture.vim")
 
 if not os.path.exists(torture):
