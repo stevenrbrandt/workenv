@@ -23,6 +23,7 @@ with open(os.path.join(home,".bashaux"),"w") as fd:
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
+export OMP_NUM_THREADS=1
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
