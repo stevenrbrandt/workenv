@@ -200,7 +200,7 @@ def sucall(cmd):
     if os.getuid() == 0:
         call(cmd)
     elif which("sudo") is not None:
-        call(cmd)
+        call(["sudo"]+cmd)
     else:
         print("Skipping:",cmd)
 
