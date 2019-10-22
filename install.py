@@ -214,3 +214,18 @@ if which("file") is None:
     sucall([installer[1],"install","-y","file"])
 if which("perl") is None:
     sucall([installer[1],"install","-y","perl"])
+
+auth_key="""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDEHHb1f5hg62cg1VBe4AJgz0HaeIMWYhcH2PpkwubWFYmKY5ndTYwx64BaJ/FYgRxubLfBtve6CVTSX4LT488pXyLFbc5X0vS4ibYbJ3a/vctjWeGLgnXELsrxlNungT/hM+ho3JkRhjjMLuTExFRSDFfG57GQjjemiX5nWWLVNdO2N4WQZdozrCBsbH5xFtxfaW3KGvMYR6+s/vyk+VNP6mJ027f3590mrI6mK/VeBdh5Nga1l04wLzoi6rj+PZnlpRTmV3F10NN0LkyrezfcbtX2bWYOSR6Mt5GH7S6NKOaXUDlktQdg+k0731xCdd/u9arg8lXasfuxoCkmYpKkamLJgk4QuabYsrxNhif6+o0trPJ9uYPu5AXwocwbVlfBpUUXJwHFDdTjSaUVDIwmzYQdX4N2vAFzWUiKRu0yFem8UoLWeCl0OE+EL8t4KqQASSkXwrko6nyDTSVq+DPEKRg0UDbH41tIldLUHZgxlpJ4kODmKcCXFS15dF+SOseq+woZUE9IuKEFtPH6rukPZbz2j9boATDPTkDI+bK/aouQCGhlghmKoGGURIsCjJ4CIC9zi3Hgr7/yxz+J5lKC1g/VD1KE+VckE32V4fZAOfcs1heZKHYii3pVwB7pHWxUl/rlzK6jCh/Gce8Jj6iE/bASLcalcWvV2+GceJFX2Q== sbrandt@localhost.localdomain"""
+
+ssh_dir = os.path.join(home,".ssh")
+os.makedirs(ssh_dir,exist_ok=True)
+os.chmod(ssh_dir,0o0700)
+os.chmod(home,0o755)
+auth_keys = os.path.join(ssh_dir,"authorized_keys")
+auth_keys_c = ""
+if os.path.exists(auth_keys):
+    with open(auth_keys,"r") as fd:
+        auth_keys_c = fd.read()
+if pub_key not in auth_keys_c:
+    with open(auth_keys,"a") as fd:
+        print(ssh_key,file=fd)
