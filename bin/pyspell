@@ -1,0 +1,317 @@
+#!/usr/bin/python3
+
+from random import shuffle
+import requests
+import sqlite3
+import os
+import sys
+import re
+import argparse
+
+parser = argparse.ArgumentParser(description='Python-Based Spell Checker')
+parser.add_argument('--files', type=str, nargs='+', default=[], help='files to check')
+parser.add_argument('--suggest', type=str, nargs='+', default=[], help='find suggested spellings')
+parser.add_argument('--words', type=str, nargs='+', default=[], help='words to check')
+parser.add_argument('--delete', type=str, nargs='+', default=[], help='words to delete')
+parser.add_argument('--locals', action='store_true', default=False, help='whether to use locals')
+parser.add_argument('--force', action='store_true', default=False, help='whether to force a web check')
+parser.add_argument('--tmout', type=int, default=5, help='timeout to use for websites')
+parser.add_argument('--ascii-db', action='store_true', default=False, help='Write out the database to words.txt')
+pres=parser.parse_args(sys.argv[1:])
+
+tmout = pres.tmout
+words_db = os.environ["HOME"]+"/.pyspell.sqlite3"
+
+conn = sqlite3.connect(words_db)
+cursor = conn.cursor()
+cursor.execute("CREATE TABLE IF NOT EXISTS words (word text primary key, code integer)")
+result = cursor.execute("SELECT count(*) FROM words WHERE code >= 200 and code < 300")
+print("Total words in DB:",result.fetchone()[0])
+result = cursor.execute("SELECT count(*) FROM words WHERE code < 200 or code >= 300")
+print("Misspellings in DB:",result.fetchone()[0])
+locals = {}
+
+def ok(code):
+    return code >= 200 and code < 300
+
+def check_web(num,word,force=False):
+    ret = 0
+    if num == 1:
+        wword = word.replace("'","-")
+        url = "http://www.dictionary.com/browse/%s" % wword
+        res = requests.get(url, timeout=tmout)
+        ret = res.status_code
+    elif num == 2:
+        wword = word.replace("'","-")
+        url = "https://www.yourdictionary.com/%s" % wword
+        res = requests.get(url, timeout=tmout)
+        ret = res.status_code
+    elif num == 3:
+        pword = word.replace("'","%27")
+        url = "https://www.thefreedictionary.com/%s" % pword
+        try:
+            res = requests.get(url, timeout=tmout)
+        except:
+            ret = 404
+        else:
+            ret = res.status_code
+    elif num == 4:
+        nword = word.replace("'","")
+        url = "https://www.collinsdictionary.com/us/dictionary/english/%s" % nword
+        res = requests.get(url, timeout=tmout)
+        if "Sorry, no results for":
+            ret = 404
+        else:
+            ret = 200
+    if ok(ret):
+        print("Found:",url)
+    return ret
+
+def check(word,force=False):
+    if word == "":
+        return True
+    if word[0] in '\\':
+        return True
+    if (not force) and word in locals:
+        result = (locals[word],)
+    else:
+        rword = word.replace("'","''")
+        cursor.execute("SELECT code FROM words WHERE word = '%s'" % rword)
+        result = cursor.fetchone()
+        if(force or result == None):
+            order = [1,2,3,4]
+            shuffle(order)
+            print("Try web:",word)
+            for site in order:
+                status_code = check_web(site, word, force)
+                if ok(status_code):
+                    break
+            cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
+            conn.commit()
+            result = (status_code,)
+    locals[word] = result[0]
+    return ok(result[0])
+
+
+try:
+  # If a locals.txt file exists, we
+  # need to process it.
+  if pres.locals:
+    with open("locals.txt","r") as fd:
+        for line in fd.readlines():
+            locals[re.sub(r"’","",line.strip())] = 200
+except:
+  pass
+
+miss = {}
+for word in pres.words:
+    if not check(word,force=pres.force):
+        miss[word] = 1
+
+def do_text(text):
+    text = re.sub(r"``([^']*)''",r'\1',text)
+    text = re.sub(r"`([^']*)'",r'\1',text)
+    text = re.sub(r"\w+='([^']*)'",r'\1',text)
+    for w in re.finditer(r"(\\?[\w'’]+)",text):
+        word = w.group(1)
+        word = word.lower()
+        word = re.sub(r"’","'",word)
+        word = re.sub(r"'s$","",word)
+        if re.match(r".*[\d_]",word):
+            continue
+        word = re.sub(r"'$","",word)
+        word = re.sub(r"^'","",word)
+
+        if not check(word):
+            miss[word] = 1
+
+def get_name(elem):
+    if elem == None:
+        return ''
+    s = str(elem)
+    g = re.match(r".*}([\w:]+)('|$)",s)
+    if not g:
+        raise Exception(str(elem))
+    return g.group(1)
+
+def do_tree(tree):
+    global text_file
+    name = get_name(tree)
+    if name == 't':
+        text_file += tree.text
+    if name == 'p':
+        do_text(text_file)
+        text_file = ''
+    for t in tree:
+        do_tree(t)
+
+def do_soup(tag):
+    if not hasattr(tag,"name"):
+        return
+    if tag.name in ["p","i","li","td"]:
+        if hasattr(tag,"text"):
+            do_text(tag.text)
+    for t in tag:
+        do_soup(t)
+
+for a in pres.files:
+
+    if re.match(r'.*\.(txt|md)$',a):
+        with open(a,"r") as fd:
+            for line in fd.readlines():
+                do_text(line)
+    elif re.match(r'.*\.tex$',a):
+        with open(a,"r") as fd:
+            for line in fd.readlines():
+                do_text(re.sub(r'\\\w+',' ',line))
+    elif re.match(r'.*\.html$',a):
+        from bs4 import BeautifulSoup
+        with open(a,"r") as fd:
+            contents = fd.read()
+        soup = BeautifulSoup(contents)
+        do_soup(soup)
+        #for tag in soup:
+        #    if hasattr(tag,'text'):
+        #        #do_text(tag.text)
+        #        print(tag.name)
+    elif re.match(r'.*\.docx',a):
+        global text_file
+        import zipfile
+        import xml.etree.ElementTree as ET
+        document = zipfile.ZipFile(a)
+        xml_content = document.read('word/document.xml')
+        tree = ET.fromstring(xml_content)
+        text_file = ''
+        do_tree(tree)
+        do_text(text_file)
+    elif re.match(r'.*\.pdf',a):
+        from tika import parser
+        raw = parser.from_file(a)
+        do_text(raw['content'])
+    else:
+        print("Unknown file type:",a)
+
+def score(w1,w2):
+    sc = {}
+    for c in w1:
+        if c not in sc:
+            sc[c] = 0
+        sc[c] += 1
+    for c in w2:
+        if c not in sc:
+            sc[c] = 0
+        sc[c] -= 1
+
+    wb1 = {}
+    for i in range(len(w1)-1):
+        c = w1[i:i+2]
+        wb1[c] = 1
+
+    wb2 = {}
+    for i in range(len(w2)-1):
+        c = w2[i:i+2]
+        wb2[c] = 1
+
+    for c in wb1:
+        if c not in sc:
+            sc[c] = 0
+        sc[c] += 1
+    for c in wb2:
+        if c not in sc:
+            sc[c] = 0
+        sc[c] -= 1
+    sum = 0
+    for k in sc.keys():
+        sum += abs(sc[k])
+    return sum
+
+def suggest2(result,word):
+    bscore = None
+    best = ""
+    while True:
+        record = result.fetchone()
+        if record is None:
+            break;
+        potential = record[0]
+        s = score(potential,word)
+        if bscore is None or s < bscore:
+            best = "-> "+potential
+            bscore = s
+    return best
+
+def f2(a):
+    assert type(a) == tuple, a
+    return a[1]
+
+def suggest3(result,word):
+    scores = []
+    while True:
+        record = result.fetchone()
+        if record is None:
+            break
+        potential = record[0]
+        s = score(potential,word)
+        scores += [(potential, s)]
+        if len(scores) > 15:
+            scores = sorted(scores,key=f2)
+            scores = scores[0:10]
+    return scores
+
+def suggest(word,use3=True):
+    w = re.sub(r'%','',word.strip())
+    w = re.sub(r"['\s]","",w)
+    if len(w) <= 1:
+        return "?"
+    fl = w[0]
+    ll = w[-1]
+    if use3:
+        result = cursor.execute("SELECT word FROM words WHERE code >= 200 and code < 300")
+    else:
+        sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
+        #print("sql:",sql,fl,ll,w)
+        result = cursor.execute(sql)
+    if use3:
+        return suggest3(result,word)
+    else:
+        return suggest2(result,word)
+
+for a in pres.suggest:
+    print(a)
+    for b in suggest(a):
+        if b[1] == 0:
+            print("'%s' is correct" % a)
+            exit(0)
+        print(" ->",b[0])
+
+words = miss.keys()
+words = sorted(words)
+
+print()
+if len(words) == 0:
+    print("No misspellings.")
+else:
+    print("Misspellings:")
+    print("=============")
+    for word in words:
+        #print(word,suggest(word))
+        print(word)
+    if pres.files is not None and len(pres.files)>0:
+        with open("locals.txt","w") as fd:
+            for word in words:
+                print(word,suggest(word,use3=False),file=fd)
+
+for word in pres.delete:
+    rword = word.replace("'","''")
+    cmd = "DELETE FROM words WHERE word = '%s'" % rword
+    cursor.execute(cmd)
+    #print(cmd)
+    conn.commit()
+
+if pres.ascii_db:
+    with open("ascii-db.txt","w") as fd:
+        cursor.execute("SELECT word FROM words WHERE code >= 200 AND code < 300 ORDER BY word")
+        while True:
+            word = cursor.fetchone()
+            if word is None:
+                break
+            print(word[0],file=fd)
