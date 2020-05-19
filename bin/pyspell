@@ -8,8 +8,20 @@ import sys
 import re
 import argparse
 
-parser = argparse.ArgumentParser(description='Python-Based Spell Checker')
-parser.add_argument('--files', type=str, nargs='+', default=[], help='files to check')
+def code_func(arg):
+    if re.match(r'[24]0\d', arg):
+        return arg
+    elif arg == 'bad':
+        return 405
+    elif arg == 'good':
+        return 205
+    else:
+        raise ValueError("bad arg: "+arg)
+
+parser = argparse.ArgumentParser(prog='pyspell', description='Python-Based Spell Checker')
+parser.add_argument('--files', type=str, nargs='+', default='', help='files to check')
+parser.add_argument('--set', type=str, nargs=1, default="", help='word to set code for')
+parser.add_argument('--code', type=code_func, nargs=1, default='404')
 parser.add_argument('--suggest', type=str, nargs='+', default=[], help='find suggested spellings')
 parser.add_argument('--words', type=str, nargs='+', default=[], help='words to check')
 parser.add_argument('--delete', type=str, nargs='+', default=[], help='words to delete')
@@ -67,6 +79,11 @@ def check_web(num,word,force=False):
         print("Found:",url)
     return ret
 
+def manual(word, code):
+    print("Action: Setting '%s' to '%s'" % (word, code))
+    cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (word,code))
+    conn.commit()
+    
 def check(word,force=False):
     if word == "":
         return True
@@ -220,7 +237,7 @@ def score(w1,w2):
         if c not in sc:
             sc[c] = 0
         sc[c] -= 1
-    sum = 0
+    sum = abs(len(w1)-len(w2))*3
     for k in sc.keys():
         sum += abs(sc[k])
     return sum
@@ -306,6 +323,9 @@ for word in pres.delete:
     cursor.execute(cmd)
     #print(cmd)
     conn.commit()
+
+if pres.set != "" and pres.code != "":
+    manual(pres.set[0], int(pres.code[0]))
 
 if pres.ascii_db:
     with open("ascii-db.txt","w") as fd:

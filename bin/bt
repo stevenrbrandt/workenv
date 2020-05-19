@@ -1,0 +1,7 @@
+#!/usr/bin/perl
+while(<>) {
+    if(m{([\w/\.]*/cactus_\w+).*[\[+]0x([a-fA-F0-9]+)[\])]}) {
+        my ($exe,$addr)=($1,$2,$3);
+        system("addr2line -e $exe $addr");
+    }
+}
