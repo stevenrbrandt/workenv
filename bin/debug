@@ -3,6 +3,7 @@ my @cmd = ("/usr/bin/gdb");
 my $cmd = $ARGV[0];
 $ARGV[0] = "run";
 my $run = join(" ",@ARGV);
+push @cmd, "--batch";
 push @cmd, "--eval-command=set logging file debug-$$.out";
 push @cmd, "--eval-command=set logging on";
 push @cmd, "--eval-command=b abort";
