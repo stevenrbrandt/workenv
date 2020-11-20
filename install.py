@@ -24,6 +24,7 @@ set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
 export OMP_NUM_THREADS=1
+export LANG=en_US.UTF-8
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
