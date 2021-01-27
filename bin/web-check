@@ -1,0 +1,109 @@
+#!/usr/bin/python3
+
+from termcolor import colored
+from datetime import datetime
+from subprocess import *
+from urllib.parse import urlparse
+import re
+import sys
+
+# Timeout to be used on all Popen commands
+tmout = 5
+
+def check_cert(website):
+  """
+  Query the website by passing a full URL, e.g. https://google.com.
+  Output will report the result of an cert check. If that fails,
+  curl will be asked to validate the website. Very often, if curl
+  accepts the website certificate, it's good enough.
+  """
+
+  rc = 0
+
+  u = urlparse(website)
+  if u.port is not None:
+    port = u.port
+  elif u.scheme == 'https':
+    port = 443
+  elif u.scheme == 'http':
+    port = 80
+  else:
+    raise Exception(u.scheme)
+
+  with open("/dev/null","w") as null:
+    pcmd = [
+      "openssl","s_client","-servername",u.netloc,
+      "-showcerts", "-connect",u.netloc+":"+str(port)
+    ]
+    #print(' '.join(pcmd))
+    p = Popen(pcmd,stdin=null,stdout=PIPE,stderr=PIPE,close_fds=True)
+
+  out, err = b"", b""
+  try:
+    out, err = p.communicate(timeout=tmout)
+    #print("pcmd:",' '.join(pcmd))
+    #print(out.decode())
+  except TimeoutExpired as e:
+    #print(e)
+    rc = 1
+
+  print(colored(website,"yellow"),end=': ')
+
+  # Parse the output of the openssl check
+  g = re.search(r"Verify\s+return\s+code:\s*(\d+)(.*\))",out.decode('ASCII'))
+  if g:
+    rc = int(g.group(1))
+    if rc == 0:
+        print(colored(g.group(2).strip(),"green"),end=' ')
+    else:
+        print(colored(g.group(2).strip(),"red"),end=' ')
+  else:
+    print(colored('unreachable','red'),end=' ')
+    rc = 1
+
+  # If openssl fails to validate, the cert might still be okay
+  # for the purpose of browsing, etc. Add this information to
+  # the output.
+  if rc != 0:
+    with open("/dev/null","w") as null:
+        p = Popen(["curl","-L",website],stdout=null,stderr=null)
+        try:
+            prc = p.wait(tmout)
+        except TimeoutExpired as e:
+            prc = 1
+        if prc:
+            print("curl-check:",colored("fail,","red"),end=' ')
+        else:
+            print("curl-check:",colored("ok,","green"),end=' ')
+
+  # Parse the output of the previous call to openssl in
+  # order to determine whether the number of valid days
+  # remaining on the cert.
+  try:
+    p2 = Popen(["openssl","x509","-noout","-dates"],
+      stdin=PIPE,stdout=PIPE,stderr=PIPE,close_fds=True)
+    p2.stdin.write(out)
+    out2, err2 = p2.communicate(timeout=tmout)
+    g = re.search(r'notAfter=(.*)',out2.decode('ASCII'))
+    if g:
+      ds = g.group(1).strip()
+      dobj = datetime.strptime(ds,'%b %d %H:%M:%S %Y %Z')
+      now = datetime.now()
+      ndays = (dobj-now).days
+      if ndays < 40:
+        print('days:',colored(ndays,"magenta"))
+      else:
+        print('days:',ndays)
+    else:
+      print('days:','?')
+  except TimeoutExpired as e:
+    print(e)
+
+  return rc
+
+n = 0
+for arg in sys.argv[1:]:
+  n += 1
+  check_cert(arg)
+  if n % 3 == 0 and n + 1 != len(sys.argv):
+    print()

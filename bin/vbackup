@@ -1,0 +1,35 @@
+#!/usr/bin/python
+#mv /home/sbrandt/backup.txt /home/sbrandt/backup.rsync.txt
+#rsync /home/sbrandt/ vault:backup/ --update --files-from=/home/sbrandt/backup.rsync.txt
+from time import sleep
+import subprocess
+import sys
+import os
+import threading
+
+backup_host = "vault.cct"
+backup_src = "/home/sbrandt/backup.txt"
+backup_dst = "/home/sbrandt/backup.rsync.txt"
+
+try:
+  fd = open(backup_src)
+except:
+  sys.exit(0)
+fw = open(backup_dst,"w")
+for line in fd.readlines():
+  line = line.strip()
+  if line.startswith("/"):
+    continue
+  file = os.path.join("/home/sbrandt",line)
+  if os.path.isfile(file):
+    fw.write(line)
+    fw.write('\n')
+fw.close()
+p=subprocess.Popen(['/usr/bin/rsync','-e',
+  'ssh -o BatchMode=yes -o IdentityFile=/home/sbrandt/.ssh/id_rsa',
+  '/home/sbrandt','sbrandt@'+backup_host+':backup/','--update','--files-from='+backup_dst])
+r = p.wait()
+if r == 0:
+  os.remove(backup_src)
+else:
+  print 'backup return code',r
