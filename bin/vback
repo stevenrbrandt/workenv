@@ -1,0 +1,30 @@
+#!/usr/bin/python
+import sys
+import os
+from subprocess import call
+
+backup_file = "/home/sbrandt/backup.txt"
+home_dir = "/home/sbrandt/"
+files = {}
+if os.path.isfile(backup_file):
+  fd = open(backup_file)
+  for line in fd.readlines():
+    line = line.strip()
+    if line in files:
+      files[line] += 1
+    else:
+      files[line] = 1
+
+for arg in sys.argv[2:]:
+  if os.path.isfile(arg):
+    full = os.path.abspath(arg)
+    if full.startswith(home_dir):
+      full = full[len(home_dir):]
+    if full not in files:
+      fd = open(backup_file,"a+")
+      fd.write(full)
+      fd.write("\n")
+      fd.close()
+
+if sys.argv[1] != "None":
+  call(sys.argv[1:])
