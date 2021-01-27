@@ -1,0 +1,150 @@
+#!/usr/bin/perl
+use strict;
+use FileHandle;
+
+my %renorm = (
+  "carried" => "carr",
+  "carrying" => "carr",
+  "carry" => "carr",
+  );
+
+my @rignore = ("me","at","the","his","where","we","i","you","with","a","an","in","b","of","he","and","but",
+  "to","said","what","then","be","they","for","it","was","is","its","this","that","because","on","us",
+  "them","him","her","hers","had","by","their","or","as","no","he'd","they'd","she","were","do",
+  "too","when","how","than","from","your","our","into","not","if","mh","have","couldn't");
+my %rignore = ();
+
+for my $r (@rignore) {
+  $rignore{$r}++;
+  $r =~ s/(ly|ing|e?d|s)$//;
+  $rignore{$r}++;
+}
+
+my @words = ();
+my $firstword = "";
+my $firstword2 = "";
+my $wpos = -1;
+my $file = undef; #$ARGV[0];
+my $linenum = undef; $ARGV[1];
+if($#ARGV==1) {
+  $file = $ARGV[0];
+  $linenum = $ARGV[1];
+} elsif($#ARGV==0 and $ARGV[0] =~ /^\d+$/ and -r "last_line.txt") {
+  my $f1 = new FileHandle;
+  open($f1,"last_line.txt") or die;
+  my $entry = <$f1>;
+  close($f1);
+  if($entry =~ /(\S+)\s+(\d+)/) {
+    $file = $1;
+    $linenum = $ARGV[0];
+  } else {
+    die;
+  }
+} elsif(-r "last_line.txt") {
+  my $f1 = new FileHandle;
+  open($f1,"last_line.txt") or die;
+  my $entry = <$f1>;
+  close($f1);
+  if($entry =~ /(\S+)\s+(\d+)/) {
+    $file = $1;
+    $linenum = $2;
+  } else {
+    die;
+  }
+}
+my $fd = new FileHandle;
+open($fd,$file) or die "could not open file ($file)";
+my $num = 0;
+my %shown = ();
+while(my $line = <$fd>) {
+  $num++;
+  next if($line =~ /^\s*$/);
+  next if($line =~ /^\s*\#/);
+  next if($line =~ /^[\d\s]*$/);
+  %shown = ();
+  firstword($line);
+  firstword2($line);
+  while($line =~ /[\w'-]+/g) {
+    addword($&);
+  }
+  if($num >= $linenum) {
+    $line =~ /(["'])(.*)\1/;
+    my $f1 = new FileHandle;
+    open($f1,">last_line.txt") or die;
+    if($line =~ /^\s*<(chapter|end|scene)/) {
+      print "\nLast line $num\n";
+      print "Next chapter: $'\n";
+      print $f1 sprintf("%s %d\n",$file,$num+1);
+      close($f1);
+      last;
+    } else {
+      print $f1 sprintf("%s %d\n",$file,$num);
+      close($f1);
+    }
+    #$line =~ s/<[^>]*>//g;
+    my $li = new FileHandle;
+    print "(",$num,")","=" x 50,"\n";
+    my @repeats = keys %shown;
+    if($#repeats >= 0) {
+      my $rp = new FileHandle;
+      open($rp,">repeated.txt") or die;
+      print $rp join("\n",@repeats),"\n";
+      close($rp);
+    }
+    # Make things readable
+    $line =~ s/—/--/g;
+    $line =~ s/’/'/g;
+    $line =~ s/…/.../g;
+    $line =~ s/\\+'//g;
+    open($li,"|rdme") or die;
+    print $li $line;
+    close($li);
+    #sleep(1);
+  }
+}
+
+sub addword
+{
+  my $word = shift;
+  my $norm = lc $word;
+  $wpos++;
+  $wpos = 0 if($wpos >= 20);
+  if(defined($renorm{$norm})) {
+    my $rn = $renorm{$norm};
+    $norm = $rn;
+  } else {
+    $norm =~ s/(ly|ing|ed|s)$//;
+    $norm =~ s/^(un|anti|re)//;
+  }
+  return if(defined($rignore{$norm}) or defined($shown{$norm}));
+  for my $w (@words) {
+    if($norm eq $w) {
+      $shown{$norm}++;
+    }
+  }
+  $words[$wpos] = $norm;
+}
+
+sub firstword
+{
+  my $line = shift;
+  while($line =~ /(^|\!|\?|\.|")\s*([\w'-]+)/g) {
+    my $first = $2;
+    if($first eq $firstword) {
+      $shown{$first}++;
+    }
+    $firstword = $first;
+  }
+}
+
+sub firstword2
+{
+  my $line = shift;
+  if($line =~ /(^)\s*([\w'-]+)/g) {
+    my $first = $2;
+    if($first eq $firstword2) {
+      $shown{$first}++;
+    }
+    $firstword2 = $first;
+  }
+}
