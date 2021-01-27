@@ -1,0 +1,18 @@
+#!/usr/bin/perl
+open(fd,"repeated.txt");
+while(<fd>) {
+  s/\s+//g;
+  next if($_ eq "");
+  $words{$_}++;
+}
+my $pat = "(".join("|",keys %words).")";
+while(<>) {
+  s/<i>/\e[4m/g;
+  s/<\/i>/\e[24m/g;
+  #s/\b(\w+ly|that|seem(ed|s|)|feel(s|)|felt)\b/\e[1m\e[32m$&\e[21m\e[39m\e[24m/g;
+  #s/$pat/\e[1m\e[31m$&\e[21m\e[39m\e[24m/gi unless($pat eq "()");
+  open(fw,">/tmp/out.txt");
+  print fw $_;
+  close(fw);
+  print;
+}
