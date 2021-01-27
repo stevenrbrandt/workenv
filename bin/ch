@@ -1,0 +1,180 @@
+#!/usr/bin/perl
+use Cwd;
+
+my %bookmarks = (
+    #"zoom" => ["https://lsu.zoom.us/j/631356683"],
+    "ccano" => ["https://lsu.zoom.us/j/587215096"],
+    "zoom" => ["https://lsu.zoom.us/j/6292662864"],
+    "dooleyzoom" => ["https://chapman.zoom.us/j/4445049264"],
+    "karate" => ["https://lsu.zoom.us/j/3873703377?pwd=077883"],
+    "chen" => ["https://zoom.us/j/9061371972?pwd=R0p1U3lFTm1ZQWJDcTMrTk1GMlJYdz09"],
+    "phy" => ["https://drive.google.com/drive/folders/0B-L3qi_kGiCLN0NRaHZDU3d4Q1k?ths=true"],
+    "wd" => ["https://www.myworkday.com/lsu/d/home.htmld"],
+    "ac" => ["https://authorcentral.amazon.com/gp/metrics/rank"],
+    "moodle" => ["https://moodle3.lsu.edu"],
+    "kdp" => ["https://kdp.amazon.com/en_US/bookshelf"],
+    "leave" => ["https://tiger02.apps.lsu.edu/certification_application/leave_certification/"],
+    "td" => ["http://www.tdameritrade.com"],
+    "beo" => ["http://localhost/cios/index.php/python/index.xml"],
+    "heorot" => ["http://localhost/cios/index.php/python/heorot.xml"],
+    "target" => ["https://rcam.target.com/"],
+    "bank" => ["https://banking.capitalone.com/"],
+    "ch" => ["http://chromecast.com/setup"],
+    "wp" => ["http://stevenrbrandt.com/wordpress/wp-admin"],
+    "ct" => ["http://curioustomes.com/wp-admin"],
+    "nano" => ["http://nanowrimo.org"],
+    "wof" => ["http://stevenrbrandt.com/worldsof/"],
+    "pass" => ["https://www.cct.lsu.edu/~sbrandt/passwds.php"],
+    "drop" => ["https://www.dropbox.com/links/features"],
+    "chess" => ["http://www.chess.com/play/computer"],
+    "d" => ["https://drive.google.com/?authuser=0#my-drive","Google Docs"],
+    "u" => ["http://youtube.com","YouTube"],
+    "bookreview1" => [
+        "http://blbooks.blogspot.com/p/review-policy.html",
+        "Book Review 1"],
+    "story" => [
+        "http://thestorycenter.com/tsc/tabid/68/g/topics/f/5/The-Pirates-of-Literature.aspx",
+        "The Story Center"],
+    "ptpdocs" => [
+        "http://help.eclipse.org/juno/index.jsp",
+        "PTP Docs"],
+    "syn" => [
+        "http://help.eclipse.org/juno/index.jsp?topic=%2Forg.eclipse.platform.doc.isv%2Fguide%2Feditors_highlighting.htm",
+        "Syntax Eclilpse"],
+    "jaxb" => [
+        "http://eclipse.org/ptp/schemas/rm.xsd",
+        "JAXB"],
+    "cli" => [
+        "http://www.dilbert.com/blog/entry/?EntryID=819&print=1",
+        "Command Line Interface"],
+    "images" => [
+        "http://images.google.com",
+        "Images"],
+    "git" => [
+        "http://git.or.cz/course/svn.html",
+        "Git crash course"],
+    "shift/red" => [
+        "http://en.wikipedia.org/wiki/Shift-reduce_parser",
+        "Shift/Reduce"],
+    "shorts" => [
+        "http://www.shortstravel.com/lsu/",
+        "Shorts"],
+    "mm" => [
+        "http://calendar.cct.lsu.edu/meetingmaker/",
+        "Meeting Maker"],
+    "eager" => [
+        "http://www.nsf.gov/pubs/policydocs/papp/gpg_2.jsp#IID2",
+        "EAGER proposal" ],
+    "wiki" => [
+        "http://wiki.cct.lsu.edu",
+        "Wikis"],
+    "svn" => [
+        "https://svn.cct.lsu.edu/repos",
+        "SVN"],
+    "laptop" => [
+        "http://www.bestbuy.com/site/Samsung+-+15.6%26%2334%3B+Laptop+-+4GB+Memory+-+500GB+Hard+Drive+-+Silver/5862633.p?id=1218700167905&skuId=5862633",
+        "Candidate Laptop"],
+    "seq" => [
+        "http://www.cs.nmsu.edu/~pfeiffer/classes/573/notes/consistency.html",
+        "Sequential Consistency vs. strict consistency"],
+    "goog" => [
+        "http://google.com",
+        "Google"],
+    "fb" => [
+        "http://facebook.com",
+        "Facebook"],
+    "mail" => [
+        "http://mail.stevenrbrandt.com",
+        "Mail for my website"],
+    "gmail"=> [
+        "https://mail.google.com/mail/u/1/#inbox",
+        "Gmail"],
+    "cal" => [
+        "http://www.google.com/calendar",
+        "My Calendar"],
+    "pubcal" => [
+        "https://www.google.com/calendar/embed?src=steven.brandt%40gmail.com&ctz=America/Chicago",
+        "My Public Calendar"],
+    "rd" => [
+        "http://www.feedly.com/home#latest",
+        "Google Reader"],
+    "ult" => [
+        "http://dl.acm.org/citation.cfm?id=949336&bnc=1",
+        "Ulterior Reference Counting"],
+    "refc" => [
+        "http://www.research.ibm.com/people/d/dfb/papers/Bacon01Concurrent.pdf",
+        "Cycle Collection in Ref Counted Systems"],
+    "stars" => [
+        "http://www.naic.edu/~gibson/starnames/starnames.html",
+        "Star Names"],
+    "funwave" => [
+        "http://chinacat.coastal.udel.edu/programs/funwave/funwave.html",
+        "Funwave Homepage"],
+    "csc7700" => [
+        "https://wiki.cct.lsu.edu/sci-comp-2012/Main_Page",
+        "Scientific Programming"],
+    "csc4700" => [
+        "http://csc.lsu.edu/csc4700mps/",
+        "Multiprocessor Systems"],
+    "volatile" => [
+        "http://www.cs.umd.edu/~pugh/java/memoryModel/jsr-133-faq.html#volatile",
+        "VolatileExample from Herlihy"],
+    "srb" => [
+        "http://stevenrbrandt.com",
+        "Home"],
+);
+
+sub file {
+  my $file = shift;
+  if($file =~ /^\//) {
+    return " -url 'file://$file'";
+  } else {
+    my $cw = Cwd::getcwd();
+    return " -url 'file://$cw/$file'";
+  }
+}
+
+my $cmd =
+#"'/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe'"
+"'/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe'"
+#"google-chrome"
+#"/home/sbrandt/Apps/firefox/firefox"
+;
+for(my $i=0;$i <= $#ARGV;$i++) {
+    my $a = $ARGV[$i];
+    if(defined($bookmarks{$a})) {
+        $cmd .= " -url '$bookmarks{$a}->[0]'";
+    } elsif($a eq "-u") {
+        $cmd .= " -url ".$ARGV[++$i];
+    } elsif($a eq "-f") {
+        my $cwd = Cwd::getcwd();
+        my $file = $ARGV[++$i];
+        if($file !~ /\//) {
+            $file = $cwd."/".$file;
+            $file =~ s/\/+/\//g;
+        }
+        print("file=$file\n");
+        if($file =~ s{.*/Downloads}{file:///C:/Users/sbrandt/Downloads}) {
+            $cmd .= " -url '$file'";
+        } else {
+            exit(0);
+        }
+    } elsif($a =~ /-f=(.*)/) {
+        $cmd .= file($1);
+    } else {
+        usage();
+        die "No such bookmark: $a";
+    }
+}
+if($#ARGV < 0) {
+    usage();
+} else {
+    print "cmd=$cmd\n";
+    system("$cmd 2>&1 1>/tmp/google.log &");
+}
+
+sub usage {
+    for my $k (sort keys %bookmarks) {
+        printf("%50s|%10s\n",$bookmarks{$k}->[1],$k);
+    }
+}
