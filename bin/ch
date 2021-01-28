@@ -154,12 +154,9 @@ for(my $i=0;$i <= $#ARGV;$i++) {
             $file = $cwd."/".$file;
             $file =~ s/\/+/\//g;
         }
+        $file =~ s{$ENV{HOME}}{C:/Users/steve};
         print("file=$file\n");
-        if($file =~ s{.*/Downloads}{file:///C:/Users/sbrandt/Downloads}) {
-            $cmd .= " -url '$file'";
-        } else {
-            exit(0);
-        }
+        $cmd .= " -url '$file'";
     } elsif($a =~ /-f=(.*)/) {
         $cmd .= file($1);
     } else {
@@ -170,7 +167,7 @@ for(my $i=0;$i <= $#ARGV;$i++) {
 if($#ARGV < 0) {
     usage();
 } else {
-    print "cmd=$cmd\n";
+    print "\n\ncmd=$cmd\n\n\n";
     system("$cmd 2>&1 1>/tmp/google.log &");
 }
 
