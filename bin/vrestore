@@ -12,5 +12,6 @@ for arg in sys.argv[1:]:
     full = home_dir + full[len(home_dir0):]
   assert full.startswith(home_dir), full
   remote_path = "vault.cct:backup/"+full[len(home_dir):]
-  print("Fetching:",remote_path)
-  call(["rsync","-a",remote_path,"."])
+  cmd = ["rsync","-a",remote_path,os.path.dirname(full)]
+  print(" ".join(cmd))
+  call(cmd)
