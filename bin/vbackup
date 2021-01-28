@@ -1,15 +1,19 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #mv /home/sbrandt/backup.txt /home/sbrandt/backup.rsync.txt
 #rsync /home/sbrandt/ vault:backup/ --update --files-from=/home/sbrandt/backup.rsync.txt
 from time import sleep
 import subprocess
 import sys
 import os
+import re
 import threading
 
 backup_host = "vault.cct"
 backup_src = "/home/sbrandt/backup.txt"
 backup_dst = "/home/sbrandt/backup.rsync.txt"
+
+home1 = re.sub(r'/*$','/',os.environ["HOME"])
+home2 = re.sub(r'/*$','/',os.path.realpath(home1))
 
 try:
   fd = open(backup_src)
@@ -18,6 +22,8 @@ except:
 fw = open(backup_dst,"w")
 for line in fd.readlines():
   line = line.strip()
+  line = re.sub("^"+home1, "", line)
+  line = re.sub("^"+home2, "", line)
   if line.startswith("/"):
     continue
   file = os.path.join("/home/sbrandt",line)
@@ -32,4 +38,4 @@ r = p.wait()
 if r == 0:
   os.remove(backup_src)
 else:
-  print 'backup return code',r
+  print('backup return code',r)

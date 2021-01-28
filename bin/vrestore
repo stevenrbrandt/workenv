@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 import sys
 import os
+import re
 from subprocess import call
 
-home_dir0 = "/home/sbrandt/"
-home_dir = "/mnt/c/Users/steve/"
+home_dir0 = re.sub(r'/*$','/',os.environ["HOME"])
+home_dir = re.sub(r'/*$','/',os.path.realpath(home_dir0))
 
 for arg in sys.argv[1:]:
   full = os.path.abspath(arg)
