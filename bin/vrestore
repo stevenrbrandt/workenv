@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+import sys
+import os
+from subprocess import call
+
+home_dir0 = "/home/sbrandt/"
+home_dir = "/mnt/c/Users/steve/"
+
+for arg in sys.argv[1:]:
+  full = os.path.abspath(arg)
+  if full.startswith(home_dir0):
+    full = home_dir + full[len(home_dir0):]
+  assert full.startswith(home_dir), full
+  remote_path = "vault.cct:backup/"+full[len(home_dir):]
+  print("Fetching:",remote_path)
+  call(["rsync","-a",remote_path,"."])

@@ -1,6 +1,12 @@
 #!/usr/bin/python3
 
-from termcolor import colored
+try:
+    from termcolor import colored
+except:
+    print("Please use pip to install `termcolor`")
+    def colored(x, _):
+        return x
+
 from datetime import datetime
 from subprocess import *
 from urllib.parse import urlparse

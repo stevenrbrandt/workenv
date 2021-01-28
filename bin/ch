@@ -135,8 +135,9 @@ sub file {
 }
 
 my $cmd =
+"'/mnt/c/Program\ Files/Google/Chrome/Application/chrome.exe'"
 #"'/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe'"
-"'/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe'"
+#"'/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe'"
 #"google-chrome"
 #"/home/sbrandt/Apps/firefox/firefox"
 ;
