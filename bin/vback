@@ -16,15 +16,19 @@ if os.path.isfile(backup_file):
       files[line] = 1
 
 for arg in sys.argv[2:]:
-  if os.path.isfile(arg):
+  used = False
+  if os.path.isfile(arg) or os.path.isdir(arg):
     full = os.path.abspath(arg)
     if full.startswith(home_dir):
       full = full[len(home_dir):]
     if full not in files:
+      used = True
       fd = open(backup_file,"a+")
       fd.write(full)
       fd.write("\n")
       fd.close()
+  if not used:
+    print("rejected:",arg)
 
 if sys.argv[1] != "None":
   call(sys.argv[1:])
