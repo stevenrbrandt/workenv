@@ -154,7 +154,8 @@ for(my $i=0;$i <= $#ARGV;$i++) {
             $file = $cwd."/".$file;
             $file =~ s/\/+/\//g;
         }
-        $file =~ s{$ENV{HOME}}{C:/Users/steve};
+        $file =~ s{^$ENV{HOME}}{C:/Users/steve};
+        $file =~ s{^/mnt/c/}{C:};
         print("file=$file\n");
         $cmd .= " -url '$file'";
     } elsif($a =~ /-f=(.*)/) {
