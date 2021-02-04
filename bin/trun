@@ -6,4 +6,4 @@ try:
     r = call(sys.argv[1:])
 finally:
     msg = " ".join(sys.argv[1:])+" => "+str(r)
-    cmd(["telegram-send",msg])
+    call(["telegram-send",msg])
