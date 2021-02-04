@@ -1,0 +1,77 @@
+#!/usr/bin/python
+import shutil
+import os
+import subprocess
+import sys
+import time
+
+# Update all Cactus svn and git repos
+
+path = os.getcwd()
+
+# Figure out if we are in a Cactus repo
+# If so, go to CCTK_HOME
+while not (
+    os.path.isdir('arrangements') and
+    os.path.isfile('src/interface.ccl') and
+    os.path.isfile('src/param.ccl') and
+    os.path.isfile('src/schedule.ccl')
+    ):
+  os.chdir('..')
+  path = os.getcwd()
+  if path == '/':
+    print 'Not in a Cactus repo'
+    sys.exit(0)
+
+def msg(repo,repodir):
+  print '/'+('=' * 10)
+  print '|',repo
+  print '|',repodir
+  print '\\'+('=' * 10)
+
+dirs = [path+'/repos']
+for d in os.listdir(path+'/arrangements'):
+    dirs += [path+'/arrangements/'+d]
+
+for fullpath in dirs:
+  if os.path.isdir(fullpath):
+    for repo in os.listdir(fullpath):
+      repodir = fullpath+'/'+repo
+      if not os.path.isdir(repodir):
+        continue
+      skip = False
+      check_file = repodir+'/.check'
+      if os.path.exists(check_file) and os.path.getmtime(check_file) > time.time():
+          print("t1=",time.time())
+          print("t2=", os.path.getmtime(check_file))
+          skip = True
+          print("Create:",check_file)
+          with open(check_file,"w"):
+              pass
+      elif not os.path.exists(check_file):
+          print("Create:",check_file)
+          with open(check_file,"w"):
+              pass
+      else:
+          pass #print("Not creating:",check_file)
+      if skip:
+          msg('SKIPPING: '+repo,repodir)
+      elif os.path.isdir(repodir+'/.svn'):
+          msg('SVN: '+repo,repodir)
+          os.chdir(repodir)
+          rc = subprocess.call(["svn","up"])
+          if rc != 0:
+            sys.exit(0)
+          os.chdir(path)
+      elif os.path.isdir(repodir+'/.git'):
+          msg('GIT: '+repo,repodir)
+          os.chdir(repodir)
+          p = subprocess.Popen(["git","rev-parse","--abbrev-ref","HEAD"],
+            stdout=subprocess.PIPE)
+          out, err = p.communicate()
+          rc = subprocess.call(["git","pull","origin",out.strip()])
+          if rc != 0:
+            sys.exit(1)
+          os.chdir(path)
+
+print 'Update complete'
