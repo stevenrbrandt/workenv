@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from subprocess import call
 import sys
+import socket
+host = socket.gethostname()
 r = -1
 try:
     r = call(sys.argv[1:])
 finally:
-    msg = " ".join(sys.argv[1:])+" => "+str(r)
+    msg = host+": "+" ".join(sys.argv[1:])+" => "+str(r)
     call(["telegram-send",msg])
