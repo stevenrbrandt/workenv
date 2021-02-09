@@ -4,7 +4,8 @@ use Cwd;
 my %bookmarks = (
     #"zoom" => ["https://lsu.zoom.us/j/631356683"],
     "ccano" => ["https://lsu.zoom.us/j/587215096"],
-    "zoom" => ["https://lsu.zoom.us/j/6292662864"],
+    #"zoom" => ["https://lsu.zoom.us/j/6292662864"],
+    zoom => ["https://lsu.zoom.us/my/steverbrandt"],
     "dooleyzoom" => ["https://chapman.zoom.us/j/4445049264"],
     "karate" => ["https://lsu.zoom.us/j/3873703377?pwd=077883"],
     "chen" => ["https://zoom.us/j/9061371972?pwd=R0p1U3lFTm1ZQWJDcTMrTk1GMlJYdz09"],

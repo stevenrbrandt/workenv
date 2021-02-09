@@ -1,4 +1,5 @@
 (
+export MPIEXEC_EXECUTABLE=$(which mpiexec)
 set -x
 mkdir -p ~/repos/amrex/build
 cd ~/repos/amrex/build
@@ -12,7 +13,7 @@ cmake -DCMAKE_BUILD_TYPE=Debug \
   -DAMReX_PIC=ON \
   -DAMReX_OMP=ON \
   -DAMReX_MPI=ON \
-  -DAMReX_TUTORIALS=ON \
+  -AMReX_BUILD_TUTORIALS=ON \
   -DCMAKE_C_COMPILER=gcc \
   -DCMAKE_CXX_COMPILER=g++ \
   -DCMAKE_INSTALL_PREFIX=$HOME/install/amrex \
