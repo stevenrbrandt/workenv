@@ -14,8 +14,8 @@ cmake -DCMAKE_BUILD_TYPE=Debug \
   -DAMReX_OMP=ON \
   -DAMReX_MPI=ON \
   -DAMReX_TUTORIALS=ON \
-  -DCMAKE_C_COMPILER=$(which gcc) \
-  -DCMAKE_CXX_COMPILER=$(which gc++) \
+  -DCMAKE_C_COMPILER=$(which mpicc) \
+  -DCMAKE_CXX_COMPILER=$(which mpicxx) \
   -DCMAKE_INSTALL_PREFIX=$HOME/install/amrex \
   -DAMREX_GPUS_PER_NODE=1 \
   ..
