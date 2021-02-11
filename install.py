@@ -26,6 +26,7 @@ export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
 HOST=$(hostname -s)
 export PS1='\\033[36m$HOST\\033[0m \\033[32m$(basename $PWD)\\033[0m$ '
+unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
