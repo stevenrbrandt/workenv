@@ -23,7 +23,8 @@ with open(os.path.join(home,".bashaux"),"w") as fd:
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
-export PS1='\\033[36m$(hostname -s)\\033[0m \\033[32m$(basename $PWD)\\033[0m$ '
+HOST=$(hostname -s)
+export PS1='\\033[36m$HOST\\033[0m \\033[32m$(basename $PWD)\\033[0m$ '
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
