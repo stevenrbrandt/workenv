@@ -1,8 +1,9 @@
 (
-export MPIEXEC_EXECUTABLE=$(which mpiexec)
 set -x
-mkdir -p ~/repos/amrex/build
-cd ~/repos/amrex/build
+export MPIEXEC_EXECUTABLE=$(which mpiexec)
+BUILDID=2
+mkdir -p ~/repos/amrex/build${BUILDID}
+cd ~/repos/amrex/build${BUILDID}
 mkdir -p ~/install
 cmake -DCMAKE_BUILD_TYPE=Debug \
   -DAMReX_PARTICLES=OFF \
@@ -16,8 +17,11 @@ cmake -DCMAKE_BUILD_TYPE=Debug \
   -DAMReX_TUTORIALS=ON \
   -DCMAKE_C_COMPILER=$(which mpicc) \
   -DCMAKE_CXX_COMPILER=$(which mpicxx) \
-  -DCMAKE_INSTALL_PREFIX=$HOME/install/amrex \
+  -DPYTHON_EXECUTABLE=$(which python3) \
+  -DMPIEXEC_EXECUTABLE=$MPIEXEC_EXECUTABLE \
+  -DCMAKE_CUDA_COMPILER=$(which nvcc) \
+  -DCMAKE_INSTALL_PREFIX=$HOME/install/amrex${BUILDID} \
   -DAMREX_GPUS_PER_NODE=1 \
   ..
 make -j6 install
-) 2>&1 | tee ~/amrex-build-log.txt
+) 2>&1 | tee ~/amrex-build${BUILDID}-log.txt
