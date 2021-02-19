@@ -25,9 +25,16 @@ set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
 HOST=$(hostname -s)
-export PS1_COLOR='\\[\\033[36m\\]\\H \\[\\033[32m\\]$(basename $PWD)\\[\\033[0m\\]$ '
-export PS1_BW='$HOST $(basename $PWD)$ '
-PS1=$PS1_COLOR
+if [ "$(id -u)" = 0 ]
+then
+    export PS1_COLOR='\\[\\033[33m\\]\\H \\[\\033[93m\\]$(basename $PWD)\\[\\033[0m\\]# '
+    export PS1_BW='$HOST $(basename $PWD)# '
+    PS1=$PS1_COLOR
+else
+    export PS1_COLOR='\\[\\033[36m\\]\\H \\[\\033[32m\\]$(basename $PWD)\\[\\033[0m\\]$ '
+    export PS1_BW='$HOST $(basename $PWD)$ '
+    PS1=$PS1_COLOR
+fi
 alias ps1color='PS1=$PS1_COLOR'
 alias ps1bw='PS1=$PS1_BW'
 unset PROMPT_COMMAND

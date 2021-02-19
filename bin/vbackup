@@ -28,6 +28,7 @@ for line in fd.readlines():
     continue
   file = os.path.join("/home/sbrandt",line)
   if os.path.isfile(file):
+    print(line)
     fw.write(line)
     fw.write('\n')
 fw.close()
