@@ -24,6 +24,7 @@ with open(os.path.join(home,".bashaux"),"w") as fd:
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
+alias spack-load='source spack-load.sh'
 HOST=$(hostname -s)
 if [ "$(id -u)" = 0 ]
 then
