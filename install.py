@@ -25,6 +25,7 @@ set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 alias vi=vim
 alias spack-load='source spack-load.sh'
+alias show-cursor='echo -en "\e[?25h"'
 HOST=$(hostname -s)
 if [ "$(id -u)" = 0 ]
 then
