@@ -8,11 +8,12 @@ import os
 import re
 import threading
 
+home = os.environ["HOME"]
 backup_host = "vault.cct"
-backup_src = "/home/sbrandt/backup.txt"
-backup_dst = "/home/sbrandt/backup.rsync.txt"
+backup_src = os.path.join(home, "backup.txt")
+backup_dst = os.path.join(home, "backup.rsync.txt")
 
-home1 = re.sub(r'/*$','/',os.environ["HOME"])
+home1 = re.sub(r'/*$','/',home)
 home2 = re.sub(r'/*$','/',os.path.realpath(home1))
 
 try:
@@ -26,8 +27,8 @@ for line in fd.readlines():
   line = re.sub("^"+home2, "", line)
   if line.startswith("/"):
     continue
-  file = os.path.join("/home/sbrandt",line)
-  if os.path.isfile(file):
+  file = os.path.join(home,line)
+  if os.path.isfile(file) or os.path.isdir(file):
     print(line)
     fw.write(line)
     fw.write('\n')
