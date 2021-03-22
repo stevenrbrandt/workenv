@@ -1,0 +1,69 @@
+import os
+import sys
+import re
+from time import sleep, time
+from traceback import print_exc
+
+ok = set()
+skip = set()
+dirskip = set()
+unk = set()
+
+for s in ["agave","pub","cache-7","TAG","cache","whl","lock","old","bin","dat",
+            "out","tgz","gz","deps","git","mpich","asc","eps","fig","LIB","aux",
+            "xl","tl","zl","yl","F77","F","F90","gp","dx","inc","h5"]:
+    skip.add(s)
+for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","log","sqlite3",
+            "yaml","vim","ini","cpp","ccl","sh","defn","patch","par","h",
+            "H","hpp","xg","th","pdf","cu","cl","hh","parfile","rpar","peg","sub","m","pm",
+            "php","cuda"]:
+    ok.add(s)
+for s in [".git",".cache",".config",".cpan",".crl",".dbus",".docker",".gradle",".local",".subversion",
+            ".texlive2019","AppData",".svn","configs"]:
+    dirskip.add(s)
+
+home = os.environ["HOME"]
+backup_file = os.path.join(home, "backup.txt")
+now_file = os.path.join(home,".now")
+with open(now_file, "w") as fd:
+    print(file=fd)
+now = os.stat(now_file).st_mtime
+then = now - 2*24*60*60
+
+def search(d,then):
+    for f in os.listdir(d):
+        if f in dirskip:
+            continue
+        full = os.path.join(d, f)
+        g = re.match(r'^.+\.([^\.]*)$', f)
+        if g:
+            suffix = g.group(1)
+            if suffix in ok:
+                pass
+            elif suffix in skip:
+                continue
+            else:
+                #raise Exception(full+" -> "+suffix)
+                if suffix not in unk:
+                    unk.add(suffix)
+                    #print(suffix,unk)
+                    #sleep(2)
+        else:
+            suffix = "xxx"
+        if os.path.isdir(full):
+            if not os.path.islink(full):
+                search(full,then)
+        else:
+            try:
+                tm = os.stat(full).st_mtime
+                if suffix in ok and tm > then:
+                    print("Backing up:",full)
+                    with open(backup_file,"a") as fa:
+                        print(full,file=fa)
+            except:
+                print("Skipping:",full)
+                print_exc()
+t1 = time()
+search(home,then)
+t2 = time()
+print("time:",(t2-t1))
