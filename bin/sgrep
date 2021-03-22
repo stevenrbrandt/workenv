@@ -65,7 +65,7 @@ sub do_search {
     } elsif(-d $file) {
         my $dd = new FileHandle;
         my @dlist = ();
-        opendir($dd,$file) or die "could not read dir $file";
+        opendir($dd,$file) or warn "could not read dir $file";
         while(my $entry = readdir($dd)) {
             # directories to avoid recursing into
             next if(defined($dirs{$entry}));

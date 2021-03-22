@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 import os
 import sys
 import re
 from time import sleep, time
 from traceback import print_exc
+from subprocess import call
 
 ok = set()
 skip = set()
@@ -19,7 +21,7 @@ for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","log","sqlite3"
             "php","cuda"]:
     ok.add(s)
 for s in [".git",".cache",".config",".cpan",".crl",".dbus",".docker",".gradle",".local",".subversion",
-            ".texlive2019","AppData",".svn","configs"]:
+            ".texlive2019","AppData",".svn","configs",".#file.txt", "backup.rsync.txt", "backup.txt"]:
     dirskip.add(s)
 
 home = os.environ["HOME"]
@@ -35,6 +37,8 @@ def search(d,then):
         if f in dirskip:
             continue
         full = os.path.join(d, f)
+        if not os.path.exists(os.path.realpath(full)):
+            continue
         g = re.match(r'^.+\.([^\.]*)$', f)
         if g:
             suffix = g.group(1)
@@ -66,4 +70,8 @@ def search(d,then):
 t1 = time()
 search(home,then)
 t2 = time()
-print("time:",(t2-t1))
+print("time:",(t2-t1)/60,"minutes")
+
+print()
+print("Calling vbackup")
+call(["vbackup"])
