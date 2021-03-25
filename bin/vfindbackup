@@ -4,7 +4,11 @@ import sys
 import re
 from time import sleep, time
 from traceback import print_exc
-from subprocess import call
+from subprocess import call, Popen, PIPE
+
+bin = os.path.dirname( os.path.realpath(sys.argv[0]) )
+vbackup = os.path.join(bin, "vbackup")
+assert os.path.exists(vbackup)
 
 ok = set()
 skip = set()
@@ -34,6 +38,22 @@ then = now - 2*24*60*60
 
 def search(d,then):
     for f in os.listdir(d):
+        if f == '.git':
+            info = os.path.join(d, ".repo-info.txt")
+            if not os.path.exists(info):
+                p = Popen(["git","config","-l"],stdout=PIPE,universal_newlines=True)
+                out, err = p.communicate()
+                with open(info, "w") as fd:
+                    fd.write(out)
+                print("Written:",info)
+        if f == '.svn':
+            info = os.path.join(d, ".repo-info.txt")
+            if not os.path.exists(info):
+                p = Popen(["svn","info"],stdout=PIPE,universal_newlines=True)
+                out, err = p.communicate()
+                with open(info, "w") as fd:
+                    fd.write(out)
+                print("Written:",info)
         if f in dirskip:
             continue
         full = os.path.join(d, f)
@@ -74,4 +94,4 @@ print("time:",(t2-t1)/60,"minutes")
 
 print()
 print("Calling vbackup")
-call(["vbackup"])
+call([vbackup])
