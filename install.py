@@ -23,6 +23,12 @@ with open(os.path.join(home,".bashaux"),"w") as fd:
     print("""
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
+if [ "$PYTHONUSERBASE" = "" ]
+then
+    export PATH="$PATH:$HOME/.local/bin"
+else
+    export PATH="$PATH:$PYTHONUSERBASE/bin"
+fi
 alias vi=vim
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
