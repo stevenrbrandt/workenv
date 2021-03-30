@@ -33,7 +33,7 @@ for line in fd.readlines():
     fw.write(line)
     fw.write('\n')
 fw.close()
-p=subprocess.Popen(['/usr/bin/rsync','-e',
+p=subprocess.Popen(['/usr/bin/rsync','-z','-e',
   'ssh -o BatchMode=yes -o IdentityFile=/home/sbrandt/.ssh/id_rsa',
   '/home/sbrandt','sbrandt@'+backup_host+':backup/','--update','--files-from='+backup_dst])
 r = p.wait()
