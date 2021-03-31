@@ -102,6 +102,9 @@ print("time:",(t2-t1)/60,"minutes")
 print()
 print("Calling vbackup")
 call([vbackup])
-from datetime import datetime
-with open(log_file, "a") as fd:
-    print(datetime.now(),file=fd)
+
+# Update the log, even if we are running interactively
+if not sys.stdout.isatty():
+    from datetime import datetime
+    with open(log_file, "a") as fd:
+        print(datetime.now(),file=fd)
