@@ -34,7 +34,14 @@ now_file = os.path.join(home,".now")
 with open(now_file, "w") as fd:
     print(file=fd)
 now = os.stat(now_file).st_mtime
-then = now - 2*24*60*60
+day = 24*60*60
+then = now - 2*day
+
+log = os.path.join(home, ".vfindbackup.log")
+log_age = os.stat(now_file).st_mtime
+if log_age > now - day:
+    print("log is too new")
+    exit(0)
 
 def search(d,then):
     for f in os.listdir(d):
@@ -95,3 +102,6 @@ print("time:",(t2-t1)/60,"minutes")
 print()
 print("Calling vbackup")
 call([vbackup])
+from datetime import datetime
+with open(log_file, "a") as fd:
+    print(datetime.now(),file=fd)
