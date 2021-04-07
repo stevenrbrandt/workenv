@@ -8,6 +8,13 @@
 # module load gcc/6.4.0
 # module load cuda/10.0
 
+M4=$(which m4)
+if [ "x${M4}" = x ]
+then
+  echo "No usable m4 command in path" >&2
+  exit 1
+fi
+
 export GMP_VER=${GMP_VER:-6.1.2}
 export LZLIB_VER=${LZLIB_VER:-1.21}
 export MPFR_VER=${MPFR_VER:-4.0.2}
