@@ -8,12 +8,12 @@
 # module load gcc/6.4.0
 # module load cuda/10.0
 
-export GMP_VER=6.1.2
-export LZLIB_VER=1.21
-export MPFR_VER=4.0.2
-export MPC_VER=1.1.0
-export GCC_VER=6.5.0
-export PARALLEL=4
+export GMP_VER=${GMP_VER:-6.1.2}
+export LZLIB_VER=${LZLIB_VER:-1.21}
+export MPFR_VER=${MPFR_VER:-4.0.2}
+export MPC_VER=${MPC_VER:-1.1.0}
+export GCC_VER=${GCC_VER:-8.4.0}
+export PARALLEL=${PARALLEL:-4}
 export GCC_BUILD_DIR=$HOME/build
 export GCC_INSTALL_DIR=$HOME/install
 

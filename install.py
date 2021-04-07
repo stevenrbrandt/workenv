@@ -56,7 +56,7 @@ if not os.path.exists(vimrc):
     with open(vimrc,"w") as fd:
         print("""
 set ai nu ic sw=4 ts=4 expandtab hlsearch
-colorscheme torture
+colorscheme blue
 syn on
 if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif

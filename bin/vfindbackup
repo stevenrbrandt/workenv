@@ -34,14 +34,15 @@ now_file = os.path.join(home,".now")
 with open(now_file, "w") as fd:
     print(file=fd)
 now = os.stat(now_file).st_mtime
-day = 24*60*60
+hour = 60*60
+day = 24*hour
 then = now - 2*day
 
 from time import time
 from datetime import datetime
 log = os.path.join(home, ".vfindbackup.log")
 log_age = os.stat(log).st_mtime
-if log_age > now - day:
+if log_age > now - 20*hour:
     print("log is too new:",datetime.fromtimestamp(log_age))
     exit(0)
 
