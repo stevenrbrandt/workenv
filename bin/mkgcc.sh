@@ -14,8 +14,8 @@ export MPFR_VER=${MPFR_VER:-4.0.2}
 export MPC_VER=${MPC_VER:-1.1.0}
 export GCC_VER=${GCC_VER:-8.4.0}
 export PARALLEL=${PARALLEL:-4}
-export GCC_BUILD_DIR=$HOME/build
-export GCC_INSTALL_DIR=$HOME/install
+export GCC_BUILD_DIR=${GCC_BUILD_DIR:-$HOME/build}
+export GCC_INSTALL_DIR=${GCC_INSTALL_DIR:-$HOME/install}
 
 set -x
 if [ ! -d $GCC_BUILD_DIR ]
