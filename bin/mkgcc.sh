@@ -17,7 +17,7 @@ fi
 
 export GMP_VER=${GMP_VER:-6.1.2}
 export LZLIB_VER=${LZLIB_VER:-1.21}
-export MPFR_VER=${MPFR_VER:-4.0.2}
+export MPFR_VER=${MPFR_VER:-4.1.0}
 export MPC_VER=${MPC_VER:-1.1.0}
 export GCC_VER=${GCC_VER:-8.4.0}
 export PARALLEL=${PARALLEL:-4}
