@@ -1,0 +1,8 @@
+#!/usr/bin/perl
+open(fd,"docker images|");
+while(<fd>) {
+    if(/[a-f0-9]{12}/) {
+        print $&,"\n";
+        last;
+    }
+}
