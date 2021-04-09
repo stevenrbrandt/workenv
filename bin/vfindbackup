@@ -31,6 +31,7 @@ for s in [".git",".cache",".config",".cpan",".crl",".dbus",".docker",".gradle","
 home = os.environ["HOME"]
 backup_file = os.path.join(home, "backup.txt")
 now_file = os.path.join(home,".now")
+log_file = os.path.join(home,".vfindbackup.log")
 with open(now_file, "w") as fd:
     print(file=fd)
 now = os.stat(now_file).st_mtime
