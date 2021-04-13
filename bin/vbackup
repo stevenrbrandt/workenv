@@ -8,12 +8,26 @@ import os
 import re
 import threading
 
+home = os.environ["HOME"]
+os.chdir(home)
 backup_host = "vault.cct"
-backup_src = "/home/sbrandt/backup.txt"
-backup_dst = "/home/sbrandt/backup.rsync.txt"
+backup_src = os.path.join(home, "backup.txt")
+backup_dst = os.path.join(home, "backup.rsync.txt")
 
-home1 = re.sub(r'/*$','/',os.environ["HOME"])
-home2 = re.sub(r'/*$','/',os.path.realpath(home1))
+def is_in_home(p):
+    if p.startswith(home):
+        return p[len(home)+1:]
+    s1 = os.stat(p)
+    while True:
+        new_p = re.sub(r'^[^/]*/','',p)
+        if p == new_p:
+            return None
+        test_p = os.path.join(home, new_p)
+        if os.path.exists(test_p):
+            s2 = os.stat(test_p)
+            if s1.st_ino == s2.st_ino:
+                return new_p
+        p = new_p
 
 try:
   fd = open(backup_src)
@@ -22,21 +36,28 @@ except:
 fw = open(backup_dst,"w")
 for line in fd.readlines():
   line = line.strip()
-  line = re.sub("^"+home1, "", line)
-  line = re.sub("^"+home2, "", line)
-  if line.startswith("/"):
+  line = is_in_home(line)
+  if line is None:
     continue
-  file = os.path.join("/home/sbrandt",line)
-  if os.path.isfile(file):
+  if os.path.isfile(line) or os.path.isdir(line):
     print(line)
     fw.write(line)
     fw.write('\n')
 fw.close()
-p=subprocess.Popen(['/usr/bin/rsync','-e',
-  'ssh -o BatchMode=yes -o IdentityFile=/home/sbrandt/.ssh/id_rsa',
-  '/home/sbrandt','sbrandt@'+backup_host+':backup/','--update','--files-from='+backup_dst])
-r = p.wait()
-if r == 0:
-  os.remove(backup_src)
-else:
-  print('backup return code',r)
+
+def rsync(fname):
+    if re.match(r'.*/x(\.\w+|)$',fname):
+        print("Skip:",fname)
+        return
+    dst = os.path.join("backup", os.path.dirname(fname))
+    cmd =['/usr/bin/rsync','-a','-z',fname,backup_host+':'+dst]
+    p = subprocess.Popen(cmd)
+    p.communicate()
+    r = p.returncode
+    if r != 0:
+        raise Exception("cmd=%s, r=%s" % (str(cmd),str(r)))
+
+with open(backup_dst, "r") as fd:
+    for line in fd.readlines():
+        fname = line.strip()
+        rsync(fname)

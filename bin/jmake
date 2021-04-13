@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+import sys
+import os
+import re
+from subprocess import call
+
+def cmd(args):
+    print(" ".join(args))
+    sys.stdout.flush()
+    call(args)
+
+def find_java(dir,suffix):
+    jfiles = []
+    for f in os.listdir(dir):
+        fname = os.path.join(dir, f)
+        if os.path.isdir(fname):
+            jfiles += find_java(fname,suffix)
+        elif f.endswith(suffix):
+            jfiles += [fname]
+    return jfiles
+
+jfiles = find_java("src",".java")
+jsrc_list = set()
+for jfile in jfiles:
+    contents = open(jfile, "r").read()
+    g = re.search("package\s+([\w\.\s]+)\s*;", contents)
+    if g:
+        package = re.sub(r'\s','',g.group(1)).split(".")
+        jbase = re.sub(r'\.java$','.class',os.path.basename(jfile))
+        jobj = os.path.join("classes",*package,jbase)
+    else:
+        jobj = re.sub(r'^src/','classes/',re.sub(r'\.java$','.class',jfile))
+    if not os.path.exists(jobj):
+        jsrc_list.add(jfile)
+    elif os.stat(jfile).st_mtime > os.stat(jobj).st_mtime:
+        jsrc_list.add(jfile)
+if len(jsrc_list) > 0:
+    cmd(["javac","-d","classes","-cp",":".join(["classes"]+sys.argv[1:])]+list(jsrc_list))
+if os.path.exists("japp.jar"):
+    cflag = "u"
+else:
+    cflag = "c"
+
+jobj_list = set()
+for jobj in find_java("classes",".class"):
+    if not os.path.exists("japp.jar"):
+        jobj_list.add(jobj)
+    elif os.stat(jobj).st_mtime > os.stat("japp.jar").st_mtime:
+        jobj_list.add(jobj)
+if len(jobj_list) > 0:
+    jadd = []
+    for j in jobj_list:
+        jadd += [re.sub(r'^classes/','',j)]
+    os.chdir("classes")
+    cmd(["jar","%sf" % cflag,"../japp.jar"]+jadd)
+print("jmake complete")
