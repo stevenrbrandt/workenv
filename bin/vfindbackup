@@ -17,9 +17,9 @@ unk = set()
 
 for s in ["agave","pub","cache-7","TAG","cache","whl","lock","old","bin","dat",
             "out","tgz","gz","deps","git","mpich","asc","eps","fig","LIB","aux",
-            "xl","tl","zl","yl","F77","F","F90","gp","dx","inc","h5","pdf"]:
+            "xl","tl","zl","yl","F77","F","F90","gp","dx","inc","h5","pdf","log"]:
     skip.add(s)
-for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","log","sqlite3",
+for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","sqlite3",
             "yaml","vim","ini","cpp","ccl","sh","defn","patch","par","h",
             "H","hpp","xg","th","cu","cl","hh","parfile","rpar","peg","sub","m","pm",
             "php","cuda"]:
@@ -104,7 +104,7 @@ t2 = time()
 print("time:",(t2-t1)/60,"minutes")
 
 print()
-print("Calling vbackup")
+print("Calling",vbackup)
 call([vbackup])
 
 # Update the log, even if we are running interactively

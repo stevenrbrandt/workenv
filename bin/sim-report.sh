@@ -1,5 +1,5 @@
 HERE=$(pwd)
-mkdir -p $HOME/repols
+mkdir -p $HOME/repos
 RESULTS=$HOME/repos/testsuite_results
 if [  -d $RESULTS ]
 then
