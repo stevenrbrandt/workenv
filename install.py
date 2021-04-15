@@ -32,7 +32,24 @@ fi
 alias vi=vim
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
-HOST=$(hostname -s)
+if [ -r /usr/bin/hostname ]
+then
+  HOST=$(hostname -s)
+else
+  HOST=""
+fi
+if [ "$HOST" = "" ] && [ -r /usr/bin/uname ]
+then
+  HOST=$(uname -n)
+fi
+if [ "$HOST" = "" ] && [ -r /etc/hostname ]
+then
+  HOST=$(cat /etc/hostname)
+fi
+if [ "$HOST" = "" ]
+then
+  HOST=Linux
+fi
 if [ "$(id -u)" = 0 ]
 then
     export PS1_COLOR='\\[\\033[33m\\]$HOST \\[\\033[93m\\]$(basename $PWD)\\[\\033[0m\\]# '
