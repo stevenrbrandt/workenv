@@ -61,3 +61,4 @@ with open(backup_dst, "r") as fd:
     for line in fd.readlines():
         fname = line.strip()
         rsync(fname)
+os.remove(backup_src)
