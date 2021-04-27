@@ -14,19 +14,27 @@ backup_host = "vault.cct"
 backup_src = os.path.join(home, "backup.txt")
 backup_dst = os.path.join(home, "backup.rsync.txt")
 
+homedirs = { home }
+
 def is_in_home(p):
-    if p.startswith(home):
-        return p[len(home)+1:]
+    p0 = p
+    for h in homedirs:
+        if p.startswith(h):
+            return p[len(h)+1:]
     s1 = os.stat(p)
+    if len(p) > 0 and p[0] == '/':
+        p = p[1:]
     while True:
-        new_p = re.sub(r'^[^/]*/','',p)
-        if p == new_p:
-            return None
-        test_p = os.path.join(home, new_p)
+        test_p = os.path.join(home, p)
         if os.path.exists(test_p):
             s2 = os.stat(test_p)
             if s1.st_ino == s2.st_ino:
-                return new_p
+                h = p0[0:len(p0)-len(p)-1]
+                homedirs.add(h)
+                return p
+        new_p = re.sub(r'^[^/]*/','',p)
+        if new_p == p:
+            return None
         p = new_p
 
 try:
