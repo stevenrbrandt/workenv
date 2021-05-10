@@ -1,0 +1,74 @@
+#!/usr/bin/perl
+use strict;
+use Data::Dumper;
+my $excel= "/mnt/c/Program Files/Microsoft Office/Office16/msoev.exe";
+my $office="/mnt/c/Program Files/Microsoft Office/Office16/msoia.exe";
+my $a = $ARGV[0];
+my %mapping = (
+    epub => "FBReader",
+    dia => "dia",
+    xoj => "xournal",
+    kra => "krita",
+    tiff => "display",
+    psd => "display",
+    tif => "display",
+    xcf => "gimp",
+    mpg => "mplayer",
+    docx => $office,
+    rtf => $office,
+    odt => $office,
+    doc => $office,
+    ppt => $office,
+    odp => $office,
+    pptx => $office,
+    pdf => "evince",
+    PDF => "evince",
+    txt => "vim",
+    tex => "vim",
+    eps => "display",
+    png => "ch -f",
+    gif => "ch -f",
+    bmp => "ch -f",
+    jpg => "ch -f",
+    JPG => "ch -f",
+    jpeg => "ch -f",
+    xlsx => "/opt/libreoffice6.1/program/soffice",
+    csv => "/opt/libreoffice6.1/program/soffice",
+    xls => "/opt/libreoffice6.1/program/soffice",
+    ods => "/opt/libreoffice6.1/program/soffice",
+    svg => "inkscape",
+    nb => "mathematica",
+    html => "ch -f",
+    m => "math",
+);
+
+my %noback = (
+  "pdf"=>1,
+  "PDF"=>1,
+  "docx"=>1,
+  );
+
+my %nosplit = (
+    "docx"=>1,
+);
+
+print("a=$a\n");
+if($a =~ /\.([^\.]+)$/) {
+    my $suffix = $1;
+    if(defined($mapping{$suffix})) {
+        my $m = $mapping{$suffix};
+        my @args = ("vback");
+        @args = () if($noback{$suffix});
+        if(defined($nosplit{$suffix})) {
+            push @args,$m;
+        } else {
+            push @args,split(/\s+/,$m);
+        }
+        push @args,$a;
+        for my $arg (@args) {
+            print("arg=",$arg,"\n");
+        }
+        exec(@args);
+    }
+}
+die "Don't know what to do with $a";
