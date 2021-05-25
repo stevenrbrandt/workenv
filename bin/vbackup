@@ -58,7 +58,7 @@ def rsync(fname):
         print("Skip:",fname)
         return
     dst = os.path.join("backup", os.path.dirname(fname))
-    cmd =['/usr/bin/rsync','-a','-z',fname,backup_host+':'+dst]
+    cmd =['/usr/bin/rsync','-a','-z','--relative',fname,backup_host+':backup/']
     p = subprocess.Popen(cmd)
     p.communicate()
     r = p.returncode
@@ -68,5 +68,12 @@ def rsync(fname):
 with open(backup_dst, "r") as fd:
     for line in fd.readlines():
         fname = line.strip()
-        rsync(fname)
+        for i in range(1,4):
+            try:
+                rsync(fname)
+                break
+            except:
+                print(">>FAILED TO SYNC:",fname,"try",i)
+                sleep(10*i)
+
 os.remove(backup_src)

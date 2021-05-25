@@ -34,7 +34,7 @@ alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
 then
-  HOST=$(hostname -s)
+  HOST=$(hostname)
 else
   HOST=""
 fi

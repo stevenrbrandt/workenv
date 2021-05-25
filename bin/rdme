@@ -10,6 +10,7 @@ perl -p -i -e 's/[\s"]+/ /g' /tmp/x.txt
 #spd-say -r 20 -w -e < /tmp/x.txt > /dev/null 2>&1
 #espeak -s 200 < /tmp/x.txt > /dev/null 2>&1
 #festival --tts < /tmp/x.txt > /dev/null 2>&1
+# esp is "espeak"
 esp "$(cat /tmp/x.txt)"
 #cp /tmp/x.txt ~/tmp/
 #~/Downloads/balcon.exe -f c:/Users/steve/tmp/x.txt --sub-fit -n "Microsoft Zira Desktop"

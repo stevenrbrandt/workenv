@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from time import sleep
 from random import shuffle
 import requests
 import sqlite3
@@ -47,6 +48,7 @@ def ok(code):
     return code >= 200 and code < 300
 
 def check_web(num,word,force=False):
+    sleep(2)
     ret = 0
     if num == 1:
         wword = word.replace("'","-")

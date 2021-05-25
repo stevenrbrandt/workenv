@@ -25,7 +25,8 @@ for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","sqlite3",
             "php","cuda"]:
     ok.add(s)
 for s in [".git",".cache",".config",".cpan",".crl",".dbus",".docker",".gradle",".local",".subversion",
-            ".texlive2019","AppData",".svn","configs",".#file.txt", "backup.rsync.txt", "backup.txt"]:
+            ".texlive2019","AppData",".svn","configs",".#file.txt", "backup.rsync.txt", "backup.txt",
+            "dbg1.txt", "dbg2.txt", "toc.txt", ".Mathematica"]:
     dirskip.add(s)
 
 home = os.environ["HOME"]
@@ -43,6 +44,9 @@ from time import time
 from datetime import datetime
 log = os.path.join(home, ".vfindbackup.log")
 log_age = os.stat(log).st_mtime
+
+then = log_age - 2*hour
+
 if log_age > now - 20*hour:
     print("log is too new:",datetime.fromtimestamp(log_age))
     exit(0)
