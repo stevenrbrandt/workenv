@@ -17,11 +17,11 @@ unk = set()
 
 for s in ["agave","pub","cache-7","TAG","cache","whl","lock","old","bin","dat",
             "out","tgz","gz","deps","git","mpich","asc","eps","fig","LIB","aux",
-            "xl","tl","zl","yl","F77","F","F90","gp","dx","inc","h5","pdf","log"]:
+            "xl","tl","zl","yl","F77","F","F90","gp","dx","inc","h5","pdf","log","xg"]:
     skip.add(s)
 for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","sqlite3",
             "yaml","vim","ini","cpp","ccl","sh","defn","patch","par","h",
-            "H","hpp","xg","th","cu","cl","hh","parfile","rpar","peg","sub","m","pm",
+            "H","hpp","th","cu","cl","hh","parfile","rpar","peg","sub","m","pm",
             "php","cuda"]:
     ok.add(s)
 for s in [".git",".cache",".config",".cpan",".crl",".dbus",".docker",".gradle",".local",".subversion",
@@ -44,6 +44,7 @@ from time import time
 from datetime import datetime
 log = os.path.join(home, ".vfindbackup.log")
 log_age = os.stat(log).st_mtime
+print("log age:", log_age)
 
 then = log_age - 2*hour
 
