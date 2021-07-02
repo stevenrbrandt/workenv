@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from requests.exceptions import ConnectionError
 from time import sleep
 from random import shuffle
 import requests
@@ -8,6 +9,10 @@ import os
 import sys
 import re
 import argparse
+
+class fake_res:
+    def __init__(self):
+        self.content = b'invalid'
 
 def code_func(arg):
     if re.match(r'[24]0\d', arg):
@@ -47,9 +52,15 @@ locals = {}
 def ok(code):
     return code >= 200 and code < 300
 
+disable_web = False
+
 def check_web(num,word,force=False):
+    if disable_web:
+        return 444
+
     sleep(2)
     ret = 0
+    res = fake_res()
     if num == 1:
         wword = word.replace("'","-")
         url = "http://www.dictionary.com/browse/%s" % wword
@@ -69,6 +80,7 @@ def check_web(num,word,force=False):
                 ret = 406
         except:
             ret = 404
+
         else:
             ret = res.status_code
     elif num == 4:
@@ -93,6 +105,7 @@ def manual(word, code):
     conn.commit()
     
 def check(word,force=False):
+    global disable_web
     if word == "":
         return True
     if word[0] in '\\':
@@ -108,11 +121,16 @@ def check(word,force=False):
             shuffle(order)
             print("Try web:",word)
             for site in order:
-                status_code = check_web(site, word, force)
+                try:
+                    status_code = check_web(site, word, force)
+                except ConnectionError as ce:
+                    status_code = 444
+                    disable_web = True
                 if ok(status_code):
                     break
-            cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
-            conn.commit()
+            if status_code != 444:
+                cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
+                conn.commit()
             result = (status_code,)
     locals[word] = result[0]
     return ok(result[0])

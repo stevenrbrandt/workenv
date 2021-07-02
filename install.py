@@ -66,6 +66,9 @@ unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
+shopt -s histappend                      # append to history, don't overwrite it
+export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+export HISTSIZE=10000
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
@@ -73,7 +76,7 @@ if not os.path.exists(vimrc):
     with open(vimrc,"w") as fd:
         print("""
 set ai nu ic sw=4 ts=4 expandtab hlsearch
-colorscheme blue
+colorscheme torture
 syn on
 if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif
