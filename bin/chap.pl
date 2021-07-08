@@ -33,7 +33,7 @@ while(<$fd>) {
     print $rw "{\\f0 Courier New;}}\\fs24\n";
     printf $rw "\\margl%d\\margr%d\\margt%d\\margb%d ",1800,1800,1400,1400;
     printf $rw "\\paperw%d\\paperh%d",8.5*1440.0,11*1440.0;
-    print $rw "{\\pard \\par}";
+    #print $rw "{\\pard \\par}";
     #print $rw sprintf("{\\pard >>> Chapter %d <<<\\par}\n",$chap);
   } else {
     if($first_line) {
@@ -47,6 +47,7 @@ while(<$fd>) {
     #s/<i>\s*/_/g;
     #s/\s*<\/i>/_/g;
     my $blank = /^\s*$/;
+    next if($blank);
     #print $fw $_ unless($blank and $last_was_blank);
     $_ = $raw;
     s/<scene.*>/{\\pard\\qc # \\par}\n{\\pard \\par}/;
@@ -72,5 +73,6 @@ sub accent {
   $txt =~ s/<'o>/\\u243\\'f3/g;
   $txt =~ s/<'i>/\\u237\\'ed/g;
   $txt =~ s/<'u>/\\u250\\'fa/g;
+  $txt =~ s/ę/\\uc1\\u281*/g;
   return $txt
 }

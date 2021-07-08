@@ -1,14 +1,18 @@
 #!/usr/bin/python3
 
 from requests.exceptions import ConnectionError
-from time import sleep
+from time import sleep, time
 from random import shuffle
 import requests
+# python3 -m pip install --user pysqlite3
 import sqlite3
 import os
 import sys
 import re
 import argparse
+from icecream import ic
+
+t1 = time()
 
 class fake_res:
     def __init__(self):
@@ -151,91 +155,6 @@ for word in pres.words:
     if not check(word,force=pres.force):
         miss[word] = 1
 
-def do_text(text):
-    text = re.sub(r"``([^']*)''",r'\1',text)
-    text = re.sub(r"`([^']*)'",r'\1',text)
-    text = re.sub(r"\w+='([^']*)'",r'\1',text)
-    for w in re.finditer(r"(\\?[\w'’]+)",text):
-        word = w.group(1)
-        word = word.lower()
-        word = re.sub(r"’","'",word)
-        word = re.sub(r"'s$","",word)
-        if re.match(r".*[\d_]",word):
-            continue
-        word = re.sub(r"'$","",word)
-        word = re.sub(r"^'","",word)
-
-        if not check(word):
-            miss[word] = 1
-
-def get_name(elem):
-    if elem == None:
-        return ''
-    s = str(elem)
-    g = re.match(r".*}([\w:]+)('|$)",s)
-    if not g:
-        raise Exception(str(elem))
-    return g.group(1)
-
-def do_tree(tree):
-    global text_file
-    name = get_name(tree)
-    if name == 't' and tree.text is not None:
-        text_file += tree.text
-    if name == 'p':
-        do_text(text_file)
-        text_file = ''
-    for t in tree:
-        do_tree(t)
-
-def do_soup(tag):
-    if not hasattr(tag,"name"):
-        return
-    if tag.name in ["p","i","li","td"]:
-        if hasattr(tag,"text"):
-            do_text(tag.text)
-    for t in tag:
-        do_soup(t)
-
-global text_file
-
-for a in pres.files:
-    print("FILE:",a)
-
-    if re.match(r'.*\.(txt|md)$',a):
-        with open(a,"r") as fd:
-            for line in fd.readlines():
-                do_text(line)
-    elif re.match(r'.*\.tex$',a):
-        with open(a,"r") as fd:
-            for line in fd.readlines():
-                do_text(re.sub(r'\\\w+',' ',line))
-    elif re.match(r'.*\.html$',a):
-        from bs4 import BeautifulSoup
-        with open(a,"r") as fd:
-            contents = fd.read()
-        soup = BeautifulSoup(contents)
-        do_soup(soup)
-        #for tag in soup:
-        #    if hasattr(tag,'text'):
-        #        #do_text(tag.text)
-        #        print(tag.name)
-    elif re.match(r'.*\.docx',a):
-        import zipfile
-        import xml.etree.ElementTree as ET
-        document = zipfile.ZipFile(a)
-        xml_content = document.read('word/document.xml')
-        tree = ET.fromstring(xml_content)
-        text_file = ''
-        do_tree(tree)
-        do_text(text_file)
-    elif re.match(r'.*\.pdf',a):
-        from tika import parser
-        raw = parser.from_file(a)
-        do_text(raw['content'])
-    else:
-        print("Unknown file type:",a)
-
 def score(w1,w2):
     sc = {}
     for c in w1:
@@ -302,7 +221,12 @@ def suggest3(result,word):
             scores = scores[0:10]
     return scores
 
+suggest_cache = {True:{}, False:{}}
+
 def suggest(word,use3=True):
+    cache = suggest_cache[use3].get(word,None)
+    if cache is not None:
+        return cache
     w = re.sub(r'%','',word.strip())
     w = re.sub(r"['\s]","",w)
     if len(w) <= 1:
@@ -316,15 +240,153 @@ def suggest(word,use3=True):
         #print("sql:",sql,fl,ll,w)
         result = cursor.execute(sql)
     if use3:
-        return suggest3(result,word)
+        retval = suggest3(result,word)
     else:
-        return suggest2(result,word)
+        retval = suggest2(result,word)
+    suggest_cache[use3][word] = retval
+    return retval
+
+def do_text(text):
+    text = re.sub(r"``([^']*)''",r'\1',text)
+    text = re.sub(r"`([^']*)'",r'\1',text)
+    text = re.sub(r"\w+='([^']*)'",r'\1',text)
+    pos = 0
+    s = ""
+    for w in re.finditer(r"(\\?[\w'’]+)",text):
+        s += text[pos:w.start()]
+        pos = w.end()
+        word = w.group(1)
+        word = word.lower()
+        word = re.sub(r"’","'",word)
+        word = re.sub(r"'s$","",word)
+        if re.match(r".*[\d_]",word):
+            s += w.group()
+            continue
+        word = re.sub(r"'$","",word)
+        word = re.sub(r"^'","",word)
+
+        if check(word):
+            s += w.group()
+        else:
+            miss[word] = 1
+            n = 0
+            wl = []
+            for w in suggest(word):
+                wl += [w[0]]
+                n += 1
+                if n == 3:
+                    break
+            s += str(wl)
+    if pos == 0:
+        return text
+    s += text[pos:]
+    return s
+
+def get_name(elem):
+    if elem == None:
+        return ''
+    s = str(elem)
+    g = re.match(r".*}([\w:]+)('|$)",s)
+    if not g:
+        raise Exception(str(elem))
+    return g.group(1)
+
+def do_tree(tree):
+    global text_file
+    name = get_name(tree)
+    if name == 't' and tree.text is not None:
+        text_file += tree.text
+    if name == 'p':
+        do_text(text_file)
+        text_file = ''
+    for t in tree:
+        do_tree(t)
+
+def do_soup(tag):
+    if not hasattr(tag,"name"):
+        return
+    if tag.name in ["p","i","li","td"]:
+        if hasattr(tag,"text"):
+            do_text(tag.text)
+    for t in tag:
+        do_soup(t)
+
+from threading import Thread
+from queue import Queue
+
+class FWriter(Thread):
+    def __init__(self,fname):
+        Thread.__init__(self)
+        self.fd = open(fname, "w")
+        self.queue = Queue()
+        self.start()
+    def run(self):
+        while True:
+            line = self.queue.get()
+            if line is None:
+                break
+            self.fd.write(line)
+    def write(self, line):
+        self.queue.put(line)
+    def close(self):
+        self.queue.put(None)
+
+fw = FWriter("out.txt")
+fw.write("Hello")
+fw.write("World")
+fw.close()
+global text_file
+
+for a in pres.files:
+    print("FILE:",a)
+
+    if re.match(r'.*\.(txt|md)$',a):
+        #with open("."+a+".schk","w") as fw:
+        try:
+            fw = FWriter("."+a+".schk")
+            with open(a,"r") as fd:
+                for line in fd.readlines():
+                    out = do_text(line)
+                    fw.write(out)
+        finally:
+            fw.close()
+    elif re.match(r'.*\.tex$',a):
+        with open(a,"r") as fd:
+            for line in fd.readlines():
+                do_text(re.sub(r'\\\w+',' ',line))
+    elif re.match(r'.*\.html$',a):
+        from bs4 import BeautifulSoup
+        with open(a,"r") as fd:
+            contents = fd.read()
+        soup = BeautifulSoup(contents)
+        do_soup(soup)
+        #for tag in soup:
+        #    if hasattr(tag,'text'):
+        #        #do_text(tag.text)
+        #        print(tag.name)
+    elif re.match(r'.*\.docx',a):
+        import zipfile
+        import xml.etree.ElementTree as ET
+        document = zipfile.ZipFile(a)
+        xml_content = document.read('word/document.xml')
+        tree = ET.fromstring(xml_content)
+        text_file = ''
+        do_tree(tree)
+        do_text(text_file)
+    elif re.match(r'.*\.pdf',a):
+        from tika import parser
+        raw = parser.from_file(a)
+        do_text(raw['content'])
+    else:
+        print("Unknown file type:",a)
 
 for a in pres.suggest:
     print(a)
     for b in suggest(a):
         if b[1] == 0:
             print("'%s' is correct" % a)
+            t2 = time()
+            print("Time:",t2-t1)
             exit(0)
         print(" ->",b[0])
 
@@ -341,7 +403,8 @@ else:
         #print(word,suggest(word))
         print(word)
     if pres.files is not None and len(pres.files)>0:
-        with open("locals.txt","w") as fd:
+        pass
+        with open("misspellings.txt","w") as fd:
             for word in words:
                 print(word,suggest(word,use3=False),file=fd)
 
@@ -363,3 +426,6 @@ if pres.ascii_db:
             if word is None:
                 break
             print(word[0],file=fd)
+
+t2 = time()
+print("Time:",t2-t1)
