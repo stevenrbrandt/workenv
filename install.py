@@ -69,6 +69,7 @@ export VISUAL=vi
 shopt -s histappend                      # append to history, don't overwrite it
 export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
 export HISTSIZE=10000
+alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
