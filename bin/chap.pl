@@ -3,6 +3,18 @@ use strict;
 use FileHandle;
 die unless(-r $ARGV[0]);
 
+my $arr = 0;
+sub altquote
+{
+  if($arr == 0) {
+    $arr = 1;
+    return "{\\ldblquote}";
+  } else {
+    $arr = 0;
+    return "{\\rdblquote}";
+  }
+}
+
 my $first_line = 0;
 my $fd = new FileHandle;
 my $fw = new FileHandle;
@@ -42,6 +54,7 @@ while(<$fd>) {
     }
     #s/^\s*#.*//;
     next if(/^\s*#/);
+    $arr = 0;
     my $raw = accent($_);
     #s/^/>/;
     #s/<i>\s*/_/g;
@@ -74,5 +87,7 @@ sub accent {
   $txt =~ s/<'i>/\\u237\\'ed/g;
   $txt =~ s/<'u>/\\u250\\'fa/g;
   $txt =~ s/ę/\\uc1\\u281*/g;
+  $txt =~ s/--/{\\emdash}/g;
+  $txt =~ s/"/altquote()/ge;
   return $txt
 }

@@ -16,7 +16,7 @@ dirskip = set()
 unk = set()
 
 for s in ["agave","pub","cache-7","TAG","cache","whl","lock","old","bin","dat",
-            "out","tgz","gz","deps","git","mpich","asc","eps","fig","LIB","aux",
+            "out","tgz","gz","deps",".spack","git","mpich","asc","eps","fig","LIB","aux",
             "xl","tl","zl","yl","F77","F","F90","gp","dx","inc","h5","pdf","log","xg"]:
     skip.add(s)
 for s in ["c","cc","C","txt","tex","java","py","pl","kra","json","sqlite3",
@@ -44,9 +44,9 @@ from time import time
 from datetime import datetime
 log = os.path.join(home, ".vfindbackup.log")
 log_age = os.stat(log).st_mtime
-print("log age:", log_age)
+print("log age:", datetime.fromtimestamp(log_age))
 
-then = log_age - 2*hour
+then = now #log_age - 2*hour
 
 if log_age > now - 20*hour:
     print("log is too new:",datetime.fromtimestamp(log_age))
@@ -71,6 +71,8 @@ def search(d,then):
                     fd.write(out)
                 print("Repo Info Written:",info)
         if f in dirskip:
+            continue
+        if re.match(r'(hd[rf]|debug)-\d+\.txt', f):
             continue
         full = os.path.join(d, f)
         if not os.path.exists(os.path.realpath(full)):
@@ -113,7 +115,6 @@ print("Calling",vbackup)
 call([vbackup])
 
 # Update the log, even if we are running interactively
-if not sys.stdout.isatty():
-    from datetime import datetime
-    with open(log_file, "a") as fd:
-        print(datetime.now(),file=fd)
+from datetime import datetime
+with open(log_file, "a") as fd:
+     print(datetime.now(),file=fd)

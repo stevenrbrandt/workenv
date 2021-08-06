@@ -67,7 +67,7 @@ sub setmode {
   my $mode = shift;
   if($mode eq "submit") {
     print "SUBMIT MODE ON\n";
-    $chapters_on = 0;
+    $chapters_on = 1;
     $italics_on = 0;
     $spacing = 2;
     $font_size = 12;

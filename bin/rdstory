@@ -60,6 +60,7 @@ while(my $line = <$fd>) {
   $num++;
   next if($line =~ /^\s*$/);
   next if($line =~ /^\s*\#/);
+  next if($line =~ /^\s*%/);
   next if($line =~ /^[\d\s]*$/);
   %shown = ();
   firstword($line);
