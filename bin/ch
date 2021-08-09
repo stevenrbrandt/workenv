@@ -173,8 +173,8 @@ for(my $i=0;$i <= $#ARGV;$i++) {
         }
         if($file =~ s{.*/Downloads}{$whome/Downloads}) {
             $cmd .= " -url '$file'";
-        } else {
-            ;#exit(0);
+        } elsif($file =~ "/mnt/c/Users") {
+            $cmd .= " -url 'file:///C:/Users$''";
         }
     } elsif($a =~ /-f=(.*)/) {
         $cmd .= file($1);
