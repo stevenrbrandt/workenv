@@ -52,12 +52,12 @@ then
 fi
 if [ "$(id -u)" = 0 ]
 then
-    export PS1_COLOR='\\[\\033[33m\\]$HOST \\[\\033[93m\\]$(basename $PWD)\\[\\033[0m\\]# '
-    export PS1_BW='$HOST $(basename $PWD)# '
+    export PS1_COLOR='\\[\\033[33m\\]$HOST \\[\\033[93m\\]$(basename "$PWD")\\[\\033[0m\\]# '
+    export PS1_BW='$HOST $(basename "$PWD")# '
     PS1=$PS1_COLOR
 else
-    export PS1_COLOR='\\[\\033[36m\\]$HOST \\[\\033[32m\\]$(basename $PWD)\\[\\033[0m\\]$ '
-    export PS1_BW='$HOST $(basename $PWD)$ '
+    export PS1_COLOR='\\[\\033[36m\\]$HOST \\[\\033[32m\\]$(basename "$PWD")\\[\\033[0m\\]$ '
+    export PS1_BW='$HOST $(basename "$PWD")$ '
     PS1=$PS1_COLOR
 fi
 alias ps1color='PS1=$PS1_COLOR'
