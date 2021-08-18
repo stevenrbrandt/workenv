@@ -30,7 +30,7 @@ else
     export PATH="$PATH:$PYTHONUSERBASE/bin"
 fi
 alias vi=vim
-alias twait='fg && trun echo wait complete'
+alias twait='fg && trun echo success || trun echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
