@@ -51,6 +51,7 @@ out, err = do_cmd(["spack","find","--json"])
 jdata = json.loads(out)
 
 versions = {}
+targets = {}
 for k in jdata:
     name = k["name"]
     version = k["version"]
@@ -58,6 +59,11 @@ for k in jdata:
         versions[name] = []
     if version not in versions[name]:
         versions[name] = [version] + versions[name]
+    target = k["arch"]["target"]["name"]
+    if name not in targets:
+        targets[name] = []
+    if target not in targets[name]:
+        targets[name] = [target] + targets[name]
 
 if "packages" not in spec:
     spec["packages"] = {}
@@ -73,6 +79,10 @@ for p in versions:
     if p not in spec["packages"]:
         spec["packages"][p] = {}
     spec["packages"][p]["version"] = versions[p]
+for t in targets:
+    if t not in spec["packages"]:
+        spec["packages"][t] = {}
+    spec["packages"][t]["target"] = targets[t]
 
 with open(spack,"w") as fd:
     yaml.dump(spec, fd)
