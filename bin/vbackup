@@ -9,12 +9,33 @@ import re
 import threading
 
 home = os.environ["HOME"]
+os.chdir(home)
 backup_host = "vault.cct"
 backup_src = os.path.join(home, "backup.txt")
 backup_dst = os.path.join(home, "backup.rsync.txt")
 
-home1 = re.sub(r'/*$','/',home)
-home2 = re.sub(r'/*$','/',os.path.realpath(home1))
+homedirs = { home }
+
+def is_in_home(p):
+    p0 = p
+    for h in homedirs:
+        if p.startswith(h):
+            return p[len(h)+1:]
+    s1 = os.stat(p)
+    if len(p) > 0 and p[0] == '/':
+        p = p[1:]
+    while True:
+        test_p = os.path.join(home, p)
+        if os.path.exists(test_p):
+            s2 = os.stat(test_p)
+            if s1.st_ino == s2.st_ino:
+                h = p0[0:len(p0)-len(p)-1]
+                homedirs.add(h)
+                return p
+        new_p = re.sub(r'^[^/]*/','',p)
+        if new_p == p:
+            return None
+        p = new_p
 
 try:
   fd = open(backup_src)
@@ -23,21 +44,36 @@ except:
 fw = open(backup_dst,"w")
 for line in fd.readlines():
   line = line.strip()
-  line = re.sub("^"+home1, "", line)
-  line = re.sub("^"+home2, "", line)
-  if line.startswith("/"):
+  line = is_in_home(line)
+  if line is None:
     continue
-  file = os.path.join(home,line)
-  if os.path.isfile(file) or os.path.isdir(file):
+  if os.path.isfile(line) or os.path.isdir(line):
     print(line)
     fw.write(line)
     fw.write('\n')
 fw.close()
-p=subprocess.Popen(['/usr/bin/rsync','-z','-e',
-  'ssh -o BatchMode=yes -o IdentityFile=/home/sbrandt/.ssh/id_rsa',
-  '/home/sbrandt','sbrandt@'+backup_host+':backup/','--update','--files-from='+backup_dst])
-r = p.wait()
-if r == 0:
-  os.remove(backup_src)
-else:
-  print('backup return code',r)
+
+def rsync(fname):
+    if re.match(r'.*/x(\.\w+|)$',fname):
+        print("Skip:",fname)
+        return
+    dst = os.path.join("backup", os.path.dirname(fname))
+    cmd =['/usr/bin/rsync','-a','-z','--relative',fname,backup_host+':backup/']
+    p = subprocess.Popen(cmd)
+    p.communicate()
+    r = p.returncode
+    if r != 0:
+        raise Exception("cmd=%s, r=%s" % (str(cmd),str(r)))
+
+with open(backup_dst, "r") as fd:
+    for line in fd.readlines():
+        fname = line.strip()
+        for i in range(1,4):
+            try:
+                rsync(fname)
+                break
+            except:
+                print(">>FAILED TO SYNC:",fname,"try",i)
+                sleep(10*i)
+
+os.remove(backup_src)

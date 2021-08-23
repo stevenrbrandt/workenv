@@ -8,15 +8,18 @@ home_var = os.environ["HOME"]
 home_dir0 = re.sub(r'/*$','/', home_var)
 home_dir = re.sub(r'/*$','/', os.path.realpath(home_dir0))
 home_dir1 = re.sub("/Downloads$","/",os.path.realpath(os.path.join(home_var, "Downloads")))
+backup_host = "vault.cct"
 
 for arg in sys.argv[1:]:
   full = os.path.abspath(arg)
   if full.startswith(home_dir0):
-    full = home_dir + full[len(home_dir0):]
+    full = full[len(home_dir0):]
   elif full.startswith(home_dir1):
-    full = home_dir + full[len(home_dir1):]
-  assert full.startswith(home_dir), full
+    full = full[len(home_dir1):]
+  else:
+    raise Exception()
   remote_path = "vault.cct:backup/"+full[len(home_dir):]
-  cmd = ["rsync","-a",remote_path,os.path.dirname(full)]
+  os.chdir(home_var)
+  cmd =['/usr/bin/rsync','-a','-z','--relative',full,backup_host+':backup/']
   print(" ".join(cmd))
   call(cmd)

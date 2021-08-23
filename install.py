@@ -30,17 +30,35 @@ else
     export PATH="$PATH:$PYTHONUSERBASE/bin"
 fi
 alias vi=vim
+alias twait='fg && trun echo success || trun echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
-HOST=$(hostname -s)
+if [ -r /usr/bin/hostname -o -r /bin/hostname ]
+then
+  HOST=$(hostname)
+else
+  HOST=""
+fi
+if [ "$HOST" = "" ] && [ -r /usr/bin/uname -o -r /bin/uname ]
+then
+  HOST=$(uname -n)
+fi
+if [ "$HOST" = "" ] && [ -r /etc/hostname ]
+then
+  HOST=$(cat /etc/hostname)
+fi
+if [ "$HOST" = "" ]
+then
+  HOST=Linux
+fi
 if [ "$(id -u)" = 0 ]
 then
-    export PS1_COLOR='\\[\\033[33m\\]\\H \\[\\033[93m\\]$(basename $PWD)\\[\\033[0m\\]# '
-    export PS1_BW='$HOST $(basename $PWD)# '
+    export PS1_COLOR='\\[\\033[33m\\]$HOST \\[\\033[93m\\]$(basename "$PWD")\\[\\033[0m\\]# '
+    export PS1_BW='$HOST $(basename "$PWD")# '
     PS1=$PS1_COLOR
 else
-    export PS1_COLOR='\\[\\033[36m\\]\\H \\[\\033[32m\\]$(basename $PWD)\\[\\033[0m\\]$ '
-    export PS1_BW='$HOST $(basename $PWD)$ '
+    export PS1_COLOR='\\[\\033[36m\\]$HOST \\[\\033[32m\\]$(basename "$PWD")\\[\\033[0m\\]$ '
+    export PS1_BW='$HOST $(basename "$PWD")$ '
     PS1=$PS1_COLOR
 fi
 alias ps1color='PS1=$PS1_COLOR'
@@ -49,6 +67,10 @@ unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
+shopt -s histappend                      # append to history, don't overwrite it
+export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+export HISTSIZE=10000
+alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
@@ -56,7 +78,7 @@ if not os.path.exists(vimrc):
     with open(vimrc,"w") as fd:
         print("""
 set ai nu ic sw=4 ts=4 expandtab hlsearch
-colorscheme blue
+colorscheme torture
 syn on
 if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif

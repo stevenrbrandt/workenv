@@ -1,6 +1,15 @@
 #!/usr/bin/python3
 import os
-from termcolor import colored
+import sys
+if sys.stdout.isatty():
+    try:
+        from termcolor import colored
+    except:
+        def colored(a,_):
+            return a
+else:
+    def colored(a,_):
+        return a
 
 ftest = '/tmp/k.txt'
 fd = os.open(ftest,os.O_CREAT|os.O_WRONLY,0o0644)
@@ -14,6 +23,8 @@ def run_test():
     except UnicodeDecodeError as ude:
         print(colored("Failure","red"))
 
+print("Test of current env:",end=' ')
+run_test()
 for utf in ["0", "1", "Unset"]:
     os.environ["PYTHONUTF8"] = utf
     if utf == "Unset":
@@ -22,5 +33,5 @@ for utf in ["0", "1", "Unset"]:
         os.environ["LANG"] = lang
         os.environ["LANGUAGE"] = lang
         os.environ["LC_ALL"] = lang
-        print("PYTHONUTF8=",utf, " LANG=",lang, sep='', end=' ')
+        print("Setting PYTHONUTF8=",utf, " LANG=",lang, sep='', end=' ')
         run_test()

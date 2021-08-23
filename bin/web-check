@@ -41,7 +41,7 @@ def check_cert(website):
       "openssl","s_client","-servername",u.netloc,
       "-showcerts", "-connect",u.netloc+":"+str(port)
     ]
-    #print(' '.join(pcmd))
+    print(' '.join(pcmd))
     p = Popen(pcmd,stdin=null,stdout=PIPE,stderr=PIPE,close_fds=True)
 
   out, err = b"", b""
