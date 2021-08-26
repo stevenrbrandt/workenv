@@ -12,4 +12,5 @@ finally:
     t2 = time()
     secs = t2 - t1
     msg = host+": "+" ".join(sys.argv[1:])+" => "+str(r)+(" in %.2f secs" % secs)
-    call(["telegram-send",msg])
+    if secs > 60:
+        call(["telegram-send",msg])
