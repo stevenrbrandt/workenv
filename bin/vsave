@@ -10,7 +10,9 @@ home_dir = re.sub(r'/*$','/', os.path.realpath(home_dir0))
 home_dir1 = re.sub("/Downloads$","/",os.path.realpath(os.path.join(home_var, "Downloads")))
 backup_host = "vault.cct"
 
+cwd = os.getcwd()
 for arg in sys.argv[1:]:
+  os.chdir(cwd)
   full = os.path.abspath(arg)
   if full.startswith(home_dir0):
     full = full[len(home_dir0):]
