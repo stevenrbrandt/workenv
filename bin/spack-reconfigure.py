@@ -59,7 +59,10 @@ for k in jdata:
         versions[name] = []
     if version not in versions[name]:
         versions[name] = [version] + versions[name]
-    target = k["arch"]["target"]["name"]
+    if type(k["arch"]["target"]) == dict:
+        target = k["arch"]["target"]["name"]
+    else:
+        target = k["arch"]["target"]
     if name not in targets:
         targets[name] = []
     if target not in targets[name]:
