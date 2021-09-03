@@ -69,7 +69,7 @@ export LANG=en_US.UTF-8
 export VISUAL=vi
 shopt -s histappend                      # append to history, don't overwrite it
 export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
-export HISTSIZE=10000
+export HISTSIZE=100000
 alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 """.format(here=here),file=fd)
 

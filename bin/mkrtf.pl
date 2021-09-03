@@ -68,7 +68,7 @@ sub setmode {
   if($mode eq "submit") {
     print "SUBMIT MODE ON\n";
     $chapters_on = 1;
-    $italics_on = 0;
+    $italics_on = 1;
     $spacing = 2;
     $font_size = 12;
     $font = "Times New Roman";
