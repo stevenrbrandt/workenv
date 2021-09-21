@@ -30,7 +30,7 @@ else
     export PATH="$PATH:$PYTHONUSERBASE/bin"
 fi
 alias vi=vim
-alias twait='fg && trun echo success || trun echo failure'
+alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
@@ -77,7 +77,7 @@ vimrc = os.path.join(home,".vimrc")
 if not os.path.exists(vimrc):
     with open(vimrc,"w") as fd:
         print("""
-set ai nu ic sw=4 ts=4 expandtab hlsearch
+set ai nu ic sw=4 ts=4 expandtab hlsearch linebreak
 colorscheme torture
 syn on
 if has("autocmd")

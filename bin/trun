@@ -7,10 +7,15 @@ host = socket.gethostname()
 r = -1
 try:
     t1 = time()
-    r = call(sys.argv[1:])
+    if len(sys.argv) > 1 and sys.argv[1] == '-n':
+        delay = -1
+        r = call(sys.argv[2:])
+    else:
+        delay = 60
+        r = call(sys.argv[1:])
 finally:
     t2 = time()
     secs = t2 - t1
     msg = host+": "+" ".join(sys.argv[1:])+" => "+str(r)+(" in %.2f secs" % secs)
-    if secs > 60:
+    if secs > delay:
         call(["telegram-send",msg])

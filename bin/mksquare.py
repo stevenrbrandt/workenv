@@ -1,16 +1,22 @@
+#!/usr/bin/env python3
 import sys
 import re
-from subprocess import call
+from subprocess import call as call_
+
+def call(args):
+    print("call:",args)
+    return call_(args)
 
 data = []
 
 srcf = sys.argv[1]
+print("src:",srcf)
 dst = re.split(r'\.', srcf)
 dst[-2] += "_sq"
 dstf = ".".join(dst)
 dst[-1] = "ppm"
 ppmf = ".".join(dst)
-print(dstf)
+print("dst:",dstf)
 call(["convert",srcf,"-compress","none",ppmf])
 with open(ppmf,"r") as fd:
     for line in  fd.readlines():
