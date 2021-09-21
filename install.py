@@ -71,6 +71,7 @@ shopt -s histappend                      # append to history, don't overwrite it
 export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
 export HISTSIZE=100000
 alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
+alias git-clear-passwd='git config --global credential.helper store'
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
