@@ -218,17 +218,13 @@ if not os.path.exists(gitconf):
 	autosetuprebase = always
 #[branch "master"]
 #	rebase = true
-[credential]
-	#helper = osxkeychain
 [core]
 	#autocrlf = input
-  whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
+    whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
 	autocrlf = false
 	safecrlf = false
 [credential]
 	helper = store
-[init]
-  templatedir=/usr/lib/git-core/templates
 """.format(here=here),file=fd)
 
 def which(cmd):
