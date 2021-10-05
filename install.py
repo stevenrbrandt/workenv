@@ -30,6 +30,7 @@ else
     export PATH="$PATH:$PYTHONUSERBASE/bin"
 fi
 alias vi=vim
+alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
