@@ -85,8 +85,8 @@ for p in versions:
 for t in targets:
     if t not in spec["packages"]:
         spec["packages"][t] = {}
-    spec["packages"][t]["buildable"] = False
-    spec["packages"][t]["target"] = targets[t]
+    # spec["packages"][t]["buildable"] = False
+    # spec["packages"][t]["target"] = targets[t]
 
 with open(spack,"w") as fd:
     yaml.dump(spec, fd)
