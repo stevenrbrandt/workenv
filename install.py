@@ -205,26 +205,36 @@ if not os.path.exists(gitconf):
     with open(gitconf,"w") as fd:
         print("""
 [user]
-	email = sbrandt@cct.lsu.edu
-	name = Steven R. Brandt
+    email = sbrandt@cct.lsu.edu
+    name = Steven R. Brandt
 [diff]
-  external = git_diff_wrapper
+  #external = git_diff_wrapper
 [pager]
-  diff =
+  #diff =
 [http]
 [merge]
-	tool = meld
+    tool = meld
 [branch]
-	autosetuprebase = always
+    autosetuprebase = always
 #[branch "master"]
-#	rebase = true
-[core]
-	#autocrlf = input
-    whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
-	autocrlf = false
-	safecrlf = false
+#   rebase = true
 [credential]
-	helper = store
+    #helper = osxkeychain
+[core]
+    #autocrlf = input
+  whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
+    autocrlf = false
+    safecrlf = false
+[credential]
+    helper = store
+[push]
+    default = current
+[pull]
+    default = current
+[alias]
+    co = checkout
+    vimdiff = -c diff.external=git_diff_wrapper -c pager.diff=0 diff
+    clear-passwd = config --global credential.helper store
 """.format(here=here),file=fd)
 
 def which(cmd):
