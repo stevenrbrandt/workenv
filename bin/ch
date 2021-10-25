@@ -160,7 +160,7 @@ for(my $i=0;$i <= $#ARGV;$i++) {
     } elsif($a eq "-f") {
         my $cwd = Cwd::getcwd();
         my $file = $ARGV[++$i];
-        if($file !~ /\//) {
+        if($file !~ /^\//) {
             $file = $cwd."/".$file;
             $file =~ s/\/+/\//g;
         }
@@ -175,6 +175,8 @@ for(my $i=0;$i <= $#ARGV;$i++) {
             $cmd .= " -url '$file'";
         } elsif($file =~ "/mnt/c/Users") {
             $cmd .= " -url 'file:///C:/Users$''";
+        } else {
+            exit(0);
         }
     } elsif($a =~ /-f=(.*)/) {
         $cmd .= file($1);
