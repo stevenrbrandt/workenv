@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+import sys, re
+
+def do_file(a):
+    data = None
+    ftype = None
+    if re.match(r'^.*\.json', a):
+        ftype = "json"
+    elif re.match(r'^.*\.ya?ml', a):
+        ftype = "yaml"
+    else:
+        raise Exception("No valid file type")
+    if ftype == "json":
+        import json
+        with open(a, "r") as fd:
+            data = json.loads(fd.read())
+    elif ftype == "yaml":
+        import yaml
+        with open(a, "r") as fd:
+            data = yaml.safe_load(fd.read())
+    return data, ftype
+
+assert len(sys.argv) in [2,3], "Usage: dmanip file path"
+
+data, ftype = do_file(sys.argv[1])
+
+def save():
+    with open(sys.argv[1], "w") as fd:
+        if ftype == "yaml":
+            import yaml
+            yaml.dump(data, fd)
+        elif ftype == "json":
+            import json
+            fd.write(json.dumps(data))
+        else:
+            assert False, "Could not determine the data type"
+
+if data is None:
+    data = {}
+
+sdata = data
+
+if len(sys.argv) > 2:
+    args = re.split(r'\.',sys.argv[2])
+    for i in range(len(args)):
+        a = args[i]
+        if i+1 == len(args):
+            g = re.match(r'^(.*?)=(.*)', a)
+            if g:
+                a = g.group(1)
+                try:
+                    v = eval(g.group(2))
+                except:
+                    # Assume type str
+                    v = g.group(2)
+                print(f"Assignment type: {type(v).__name__}")
+                if a in sdata:
+                    assert type(v) == type(sdata[a]), \
+                        f'Attempt to assign type {type(v).__name__} to a field of type {type(sdata[a]).__name__}'
+                sdata[a] = v
+                save()
+        sdata = sdata[a]
+
+print("DataType:",type(sdata).__name__)
+if type(sdata) in [list,dict]:
+    for k in sdata:
+        print(k)
+else:
+    print(sdata)
+
