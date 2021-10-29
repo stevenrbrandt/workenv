@@ -39,7 +39,7 @@ ofile = None
 if pres.inplace:
     ofile = pres.file[0]
     assert pres.output is None, "Cannot specify both -i and -o file"
-else:
+elif ofile is not None:
     ofile = pres.output[0]
 
 def save():
