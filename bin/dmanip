@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
-import sys, re
+import sys, re, os
+import argparse
 
-def do_file(a):
-    data = None
+parser = argparse.ArgumentParser(prog='dmanip', description='Data Manipulator for JSON and YAML')
+parser.add_argument('-v', '--verbose', action='store_true', default=False, help='whether to spout much words and information')
+parser.add_argument('-i', '--inplace', action='store_true', default=False, help='whether to edit a file in place')
+parser.add_argument('-f', '--force', action='store_true', default=False, help='whether to allow a change in data type on assignment')
+parser.add_argument('-o','--output', type=str, nargs=1, default=None, help='where to write the output')
+parser.add_argument('file',help='The file to read data from',nargs=1)
+parser.add_argument('query',help='The query and/or assignment string',nargs='?')
+pres=parser.parse_args(sys.argv[1:])
+
+def get_ftype(a):
     ftype = None
     if re.match(r'^.*\.json', a):
         ftype = "json"
     elif re.match(r'^.*\.ya?ml', a):
         ftype = "yaml"
     else:
-        raise Exception("No valid file type")
+        raise Exception(f"No valid file type for '{a}'")
+    return ftype
+
+def do_file(a):
+    data = None
+    ftype = get_ftype(a)
     if ftype == "json":
         import json
         with open(a, "r") as fd:
@@ -20,12 +34,23 @@ def do_file(a):
             data = yaml.safe_load(fd.read())
     return data, ftype
 
-assert len(sys.argv) in [2,3], "Usage: dmanip file path"
-
-data, ftype = do_file(sys.argv[1])
+data, ftype = do_file(pres.file[0])
+ofile = None
+if pres.inplace:
+    ofile = pres.file[0]
+    assert pres.output is None, "Cannot specify both -i and -o file"
+else:
+    ofile = pres.output[0]
 
 def save():
-    with open(sys.argv[1], "w") as fd:
+    assert ofile is not None, "Need to specify -i or -o file"
+    assert type(ofile) == str, f"Bad ofile type: {type(ofile).__name__}"
+    ftype = get_ftype(ofile)
+    path = os.path.abspath(ofile)
+    dirname = os.path.dirname(path)
+    basename = os.path.basename(path)
+    tmpfile = os.path.join(dirname,f".{basename}.tmp")
+    with open(tmpfile, "w") as fd:
         if ftype == "yaml":
             import yaml
             yaml.dump(data, fd)
@@ -34,37 +59,65 @@ def save():
             fd.write(json.dumps(data))
         else:
             assert False, "Could not determine the data type"
+    if os.path.exists(ofile):
+        os.unlink(ofile)
+    os.rename(tmpfile, ofile)
 
 if data is None:
     data = {}
 
 sdata = data
 
-if len(sys.argv) > 2:
-    args = re.split(r'\.',sys.argv[2])
+if pres.query is not None:
+    args = re.split(r'\.',pres.query)
     for i in range(len(args)):
         a = args[i]
         if i+1 == len(args):
             g = re.match(r'^(.*?)=(.*)', a)
             if g:
+                append = False
                 a = g.group(1)
+                if a.endswith("+"):
+                    append = True
+                    a = a[:-1]
                 try:
                     v = eval(g.group(2))
                 except:
                     # Assume type str
                     v = g.group(2)
-                print(f"Assignment type: {type(v).__name__}")
+                if pres.verbose:
+                    print(f"Assignment type: {type(v).__name__}")
+                if append:
+                    if type(sdata) == dict:
+                        assert a in sdata, "Append to missing element"
+                    elif type(sdata) == list:
+                        a = int(a)
+                    assert type(v) == type(sdata[a]), "Attempt to append different types: {type(v).__name__} and {type(sdata[a]).__name__}"
+                    assert type(v) in [str, list, int, float], "Invalid append type: {type(v).__name__}, must be str, list, int, or float."
+                    v = sdata[a] + v
                 if a in sdata:
                     assert type(v) == type(sdata[a]), \
                         f'Attempt to assign type {type(v).__name__} to a field of type {type(sdata[a]).__name__}'
                 sdata[a] = v
                 save()
+        if type(sdata) == list:
+            a = int(a)
         sdata = sdata[a]
 
-print("DataType:",type(sdata).__name__)
-if type(sdata) in [list,dict]:
+if pres.verbose:
+    print("DataType:",type(sdata).__name__)
+if type(sdata) == dict:
     for k in sdata:
-        print(k)
+        if pres.verbose:
+            print(k,"=>",sdata[k])
+        else:
+            print(k)
+elif type(sdata) == list:
+    for k in range(len(sdata)):
+        if pres.verbose:
+            print(k,"=>",sdata[k])
+        else:
+            print(k)
 else:
     print(sdata)
 

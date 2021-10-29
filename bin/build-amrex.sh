@@ -1,11 +1,12 @@
 (
 set -xe
+export BUILDID=1
+export BUILD_TYPE=RelWithDebugInfo
 export MPIEXEC_EXECUTABLE=$(which mpiexec)
-export INSTALL_DIR=/project/$USER/install
-export BUILD_DIR=/project/$USER/build
+export INSTALL_DIR=/project/$USER/install${BUILDID}${BUILD_TYPE}
+export BUILD_DIR=/project/$USER/build${BUILDID}${BUILD_TYPE}
 export SRC_DIR=$HOME/repos/amrex
-BUILDID=2
-if [ $BUILDID = 1 ]
+if [ $BUILDID = 2 ]
 then
     CUDA=OFF
 else
@@ -14,17 +15,13 @@ fi
 echo "CUDA is $CUDA"
 sleep 5
 spack load gcc@9.4.0 cuda mpich%gcc@9.4.0 cmake%gcc@9.4.0
-#rm -fr ~/repos/amrex/build${BUILDID}
-mkdir -p $BUILD_DIR/amrex-build${BUILDID}
-cd $BUILD_DIR/amrex-build${BUILDID}
-mkdir -p $INSTALL_DIR
-BUILD_TYPE=Debug
-ASSERTS=Off
+rm -fr $BUILD_DIR $INSTALL_DIR
+mkdir -p $BUILD_DIR $INSTALL_DIR
+cd $BUILD_DIR
 if [ $CUDA = ON ]
 then
   cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DAMReX_PARTICLES=ON \
-    -DAMReX_ASSERTIONS=$ASSERTS \
     -DAMReX_FORTRAN=ON \
     -DAMReX_CUDA=$CUDA \
     -DAMReX_GPU_BACKEND=CUDA \
@@ -35,13 +32,12 @@ then
     -DCMAKE_CXX_COMPILER=$(which mpicxx) \
     -DMPIEXEC_EXECUTABLE=$MPIEXEC_EXECUTABLE \
     -DCMAKE_CUDA_COMPILER=$(which nvcc) \
-    -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/amrex${BUILDID} \
-    -DAMREX_GPUS_PER_NODE=1 \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR \
+    -DAMREX_GPUS_PER_NODE=2 \
     $SRC_DIR |& tee ~/amrex-config${BUILDID}-log.txt
 else
   cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
     -DAMReX_PARTICLES=ON \
-    -DAMReX_ASSERTIONS=$ASSERTS \
     -DAMReX_FORTRAN=ON \
     -DAMReX_CUDA=$CUDA \
     -DAMReX_PIC=ON \
@@ -50,8 +46,8 @@ else
     -DCMAKE_C_COMPILER=$(which mpicc) \
     -DCMAKE_CXX_COMPILER=$(which mpicxx) \
     -DMPIEXEC_EXECUTABLE=$MPIEXEC_EXECUTABLE \
-    -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/amrex${BUILDID} \
+    -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR \
     $SRC_DIR |& tee ~/amrex-config${BUILDID}-log.txt
 fi
 make -j6 install
-) |& tee ~/amrex-build${BUILDID}-log.txt
+) |& tee /project/sbrandt/amrex-build${BUILDID}-log.txt
