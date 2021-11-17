@@ -132,4 +132,3 @@ elif type(sdata) == list:
             print(k)
 else:
     print(sdata)
-
