@@ -41,7 +41,12 @@ def do_file(a):
             data = yaml.safe_load(fd.read())
     return data, ftype
 
-data, ftype = do_file(pres.file[0])
+try:
+    data, ftype = do_file(pres.file[0])
+except:
+    print(f"File {pres.file[0]} not found. Creating...")
+    data, ftype = {}, get_ftype(pres.file[0])
+
 ofile = None
 if pres.inplace:
     ofile = pres.file[0]
@@ -76,22 +81,25 @@ if data is None:
 sdata = data
 
 if pres.query is not None:
-    args = re.split(r'\.',pres.query)
+    geq = re.match(r'^(.*?)=(.*)', pres.query)
+    if geq:
+        query = geq.group(1)
+    else:
+        query = pres.query
+    args = re.split(r'\.',query)
     for i in range(len(args)):
         a = args[i]
         if i+1 == len(args):
-            g = re.match(r'^(.*?)=(.*)', a)
-            if g:
+            if geq:
                 append = False
-                a = g.group(1)
                 if a.endswith("+"):
                     append = True
                     a = a[:-1]
                 try:
-                    v = eval(g.group(2))
+                    v = eval(geq.group(2))
                 except:
                     # Assume type str
-                    v = g.group(2)
+                    v = geq.group(2)
                 if pres.verbose:
                     print(f"Assignment type: {type(v).__name__}")
                 if append:
@@ -109,6 +117,10 @@ if pres.query is not None:
                 save()
         if type(sdata) == list:
             a = int(a)
+        if a not in sdata and pres.force:
+            if pres.verbose:
+                print("creating dict:",a)
+            sdata[a] = {}
         sdata = sdata[a]
 
 if pres.verbose:
@@ -127,4 +139,3 @@ elif type(sdata) == list:
             print(k)
 else:
     print(sdata)
-
