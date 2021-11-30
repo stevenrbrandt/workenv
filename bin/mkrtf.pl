@@ -579,7 +579,7 @@ while(<$fdr>) {
 close($fdd);
 endpar();
 
-my $wcn = $wc - 7416;
+my $wcn = $wc - 65169;
 
 print $fdw "\\sect}\n";
 print $fdw "}\n";
@@ -587,7 +587,7 @@ print "Word Count=$wc\n";
 my @d = localtime();
 if ($d[4] == 10) {
     my $goal = 50e3;
-    for my $count ((30,29,28)) {
+    for my $count ((30-$d[3]+1)) {
         my $wday = $goal/$count;
         my $mwcn = int($wday*$d[3]);
         $wday = int($wday);

@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 import sys, re, os
 import argparse
+import textwrap
 
-parser = argparse.ArgumentParser(prog='dmanip', description='Data Manipulator for JSON and YAML')
+parser = argparse.ArgumentParser(prog='dmanip', description='Data Manipulator for JSON and YAML',
+epilog=textwrap.dedent('''\
+     Usage:
+        The following line would set the hdf5 variant in packages.yaml
+
+        dmanip ~/.spack/packages.yaml packages.hdf5.variant="+cxx +mpi"
+     '''))
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='whether to spout much words and information')
 parser.add_argument('-i', '--inplace', action='store_true', default=False, help='whether to edit a file in place')
 parser.add_argument('-f', '--force', action='store_true', default=False, help='whether to allow a change in data type on assignment')
