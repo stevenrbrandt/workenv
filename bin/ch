@@ -3,7 +3,7 @@ use Cwd;
 
 my %bookmarks = (
     #"zoom" => ["https://lsu.zoom.us/j/631356683"],
-    "git-token" = ["https://github.com/settings/tokens"],
+    "git-token" => ["https://github.com/settings/tokens"],
     "ccano" => ["https://lsu.zoom.us/j/587215096"],
     "zoom" => ["https://lsu.zoom.us/my/steverbrandt"],
     "dooleyzoom" => ["https://chapman.zoom.us/j/4445049264"],
