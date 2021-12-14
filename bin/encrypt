@@ -1,6 +1,6 @@
 if [[ /tmp/todo.txt -nt ~/LSUOneDrive/todo.txt.gpg ]]
 then
-    gpg -o ~/LSUOneDrive/todo.txt.gpg -e /tmp/todo.txt
+    gpg -o ~/LSUOneDrive/todo.txt.gpg -c /tmp/todo.txt
 else
     echo already decrypted
 fi
