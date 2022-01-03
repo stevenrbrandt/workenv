@@ -2,5 +2,5 @@ if [[ /tmp/todo.txt -nt ~/LSUOneDrive/todo.txt.gpg ]]
 then
     gpg -o ~/LSUOneDrive/todo.txt.gpg -c /tmp/todo.txt
 else
-    echo already decrypted
+    echo already encrypted
 fi

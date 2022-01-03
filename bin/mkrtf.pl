@@ -24,8 +24,8 @@ my $emdash = 0;
 my $ellipsis = 0;
 my $font_size = 12; 
 my $spacing = 1; 
-my $paperw = 6.0; # page width
-my $paperh = 9.0; # page height
+my $paperw = 6; # page width
+my $paperh = 9; # page height
 #my $paperw = 4.25;
 #my $paperh = 6.875;
 my $italics_on = 1;
@@ -134,9 +134,12 @@ sub setmode {
     print "STORY MODE ON\n";
     $chapters_on = 1;
     $italics_on = 1;
-    $spacing = 2;
+    $emdash = 1;
+    $spacing = 1;
     $font_size = 12;
     $font = "Courier New";
+    $paperw = 6;
+    $paperh = 9;
     $notes_on = 0;
     $bold_chapters = 0;
   } elsif($mode eq "edit") {
@@ -528,8 +531,9 @@ while(<$fdr>) {
       ;
     } elsif(/<bookid=/) {
       ;
-    } elsif(/<geometry=/) {
-      ;
+    } elsif(/<geometry=([\d\.]+)x([\d\.]+)/) {
+      $paperw = 1*$1;
+      $paperh = 1*$2;
     } elsif(/<font=.*>/) {
       ;
     } elsif(/^\s*<[\w-]+(="[^"]*")?>\s*$/) {
