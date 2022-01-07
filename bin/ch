@@ -136,19 +136,25 @@ sub file {
   }
 }
 
-my $cmd;
-my $b1 = "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe";
-my $b2 = "/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe";
-my $b3 = "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe";
-if(-e $b1) {
-    $cmd = "'$b1'";
+my @cmd = (
+ "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+ "/mnt/c/Users/steve/AppData/Local/Programs/Opera/opera.exe",
+ "/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe",
+ "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
+);
+
+my $cmd = undef;
+for $c (@cmd) {
+    if(-e $c) {
+        print("FOUND: $c\n");
+        $cmd = $c;
+        last;
+    } else {
+        print("  --not found: $c\n");
+    }
 }
-if(-e $b3) {
-    $cmd = "'$b3'";
-}
-if(-e $b2) {
-    $cmd = "'$b2'";
-}
+print("Using: $cmd\n");
+
 die unless(defined($cmd));
 #"google-chrome"
 #"/home/sbrandt/Apps/firefox/firefox"
