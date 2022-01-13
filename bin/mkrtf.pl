@@ -3,6 +3,8 @@ use strict;
 use FileHandle;
 use Lingua::EN::Numbers qw(num2en num2en_ordinal);
 
+# NOTE: Hit F9 to update PAGEREFs
+
 my %fonts = ();
 sub addfont {
     my $f = shift;
@@ -570,6 +572,7 @@ while(<$fdr>) {
         s/<b>/\\b /g;
         s/<trade>/{\\'99}/g;
         s/<copyright>/{\\'a9}/g;
+        s/©/{\\'a9}/g;
         s/<\/b>/\\b0 /g;
         $_ = accent($_);
         #s/--/{\\u8212}/g if($emdash);
