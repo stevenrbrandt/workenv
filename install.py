@@ -144,22 +144,31 @@ let g:colors_name="torture"
 "hi CursorIM	
 "hi Directory	
 "See https://github.com/guns/xterm-color-table.vim
-hi DiffAdd guifg=gray guibg=blue
-hi DiffAdd ctermfg=24 ctermbg=156
-hi DiffChange guifg=white guibg=black
-hi DiffChange ctermfg=white ctermbg=black
-hi DiffText guifg=green guibg=black
-hi DiffText ctermfg=green ctermbg=black
-hi italics  guifg=darkblue guibg=green
-hi italics  ctermfg=darkblue ctermbg=green
-hi quote guifg=green guibg=green
-hi quote ctermfg=black ctermbg=green
+
+hi DiffAdd guifg=white guibg=darkblue
+hi DiffAdd ctermfg=white ctermbg=darkblue
+
+hi DiffChange guifg=white guibg=darkred
+hi DiffChange ctermfg=white ctermbg=darkred
+
+hi DiffText guifg=white guibg=darkblue
+hi DiffText ctermfg=white ctermbg=darkblue
+
+hi italics  guifg=darkblue guibg=black
+hi italics  ctermfg=darkblue ctermbg=black
+
+hi quote guifg=green guibg=black
+hi quote ctermfg=black ctermbg=black
+
 hi quoteerror ctermfg=black ctermbg=red
 hi quixote ctermfg=black ctermbg=cyan
 hi letter_a ctermfg=black ctermbg=cyan
-"hi DiffDelete	
-"hi DiffText	
-"hi ErrorMsg	
+
+hi DiffDelete guifg=white guibg=darkblue
+hi DiffDelete ctermfg=white ctermbg=darkblue
+
+hi ErrorMsg	guifg=red term=bold
+hi ErrorMsg	ctermfg=red term=bold
 "hi VertSplit	
 "hi Folded		
 "hi FoldColumn	

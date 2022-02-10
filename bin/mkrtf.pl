@@ -11,6 +11,20 @@ sub addfont {
     my @k = keys %fonts;
     $fonts{$f} = $#k+1;
 }
+sub fontzero {
+    my $f = shift;
+    my %newfonts = {};
+    my $n=0;
+    $newfonts{$f} = $n++;
+    for my $fn (keys %fonts) {
+        if(!defined($newfonts{$fn})) {
+            $newfonts{$fn} = $n++;
+        }
+    }
+    for my $fn (keys %fonts) {
+        $fonts{$fn} = $newfonts{$fn};
+    }
+}
 
 my $use_toc = 0;
 
@@ -48,6 +62,7 @@ my ($marginl,$marginr,$margint,$marginb) =
 my $bold_chapters = 1;
 my $mode = "submit";
 my $scenebrk = "#";
+my $firstletter = 0;
 
 ######################################
 #Commands:
@@ -128,7 +143,6 @@ sub setmode {
     $italics_on = 1;
     $spacing = 1;
     $font_size = 12;
-    $font = "Times New Roman";
     $notes_on = 0;
     $bold_chapters = 0;
     $indent = 0;
@@ -139,7 +153,8 @@ sub setmode {
     $emdash = 1;
     $spacing = 1;
     $font_size = 12;
-    $font = "Courier New";
+    $smartquote=1;
+    $font = "Arial";
     $paperw = 6;
     $paperh = 9;
     $notes_on = 0;
@@ -292,6 +307,7 @@ my ($mll,$mlr,$mlt,$mlb)=(
 open($fdr,$infile) or die $infile;
 my $outfile = $infile;
 $outfile =~ s/\.txt$/.rtf/;
+fontzero($font);
 open($fdw,">$outfile") or die $outfile;
 print $fdw "{\\rtf1\\ansi\\deff0 {\\fonttbl \n";
 for my $fk (keys %fonts) {
@@ -344,6 +360,7 @@ while(<$fdr>) {
         if($1 eq "no") {
             ;#$chapter++;
         } else {
+            $firstletter=1;
             print $fdw "{\\pard \\par}\n" x $chapter_lines unless(defined($noskip));
             print $fdw "\\b " if($bold_chapters);
             print "Chapter $chapter: $title\n";
@@ -451,6 +468,19 @@ while(<$fdr>) {
             $left = $titles[$i];
             my $link  = "{\\field{\\*\\fldinst HYPERLINK \\\\l \"a$tc\"}{\\fldrslt\\ul0 $left}}";
             print $fdw "{\\pard $link \\tqr\\tldot\\tx$sz\\tab\\ql $right \\par}\n";
+        }
+    } elsif(/<tocall2>/) {
+        my $sz = ($paperw-$marginl-$marginr-0.5)*1440;
+        $use_toc = 1;
+        my $bkmkid = "[TOC]"; 
+        print $fdw "{\\*\\bkmkstart $bkmkid}{\\*\\bkmkend $bkmkid}\n";
+        for(my $i=0;$i<=$#titles;$i++) {
+            my $left = $i;
+            my $tc = $i+1; #$titles[$i];
+            my $right = "{\\field{\\*\\fldinst PAGEREF a$tc}{\\fldrslt}}";
+            $left = $titles[$i];
+            my $link  = "{\\field{\\*\\fldinst HYPERLINK \\\\l \"a$tc\"}{\\fldrslt\\ul0 $left}}";
+            print $fdw "{\\pard $link \\par}\n";
         }
     } elsif(/<toc=(["'])(\w+)\1 text=\1(.*)\1>/) {
         my $left = $3;
@@ -580,6 +610,12 @@ while(<$fdr>) {
         #s/\.\.\./{\\u8212}/g if($ellipsis);
         #s/\.\.\./{\\ellipsis}/g if($ellipsis);
         s/\.\.\./{\\u8230\\'81}/g if($ellipsis);
+        if($firstletter) {
+            #die $_; yyy
+            $firstletter = 0;
+            my $bfs = int($fs*1.5);
+            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
+        }
         print $fdw $_;
     }
 }
@@ -613,6 +649,7 @@ sub startpar {
     $par = 1;
     #my $ind = sprintf("%d",$margins*720.0+0.5);
     my $ind = sprintf("%d",$indent*1440.0+0.5);
+    $ind = "" if($firstletter);
     printf $fdw "{\\pard\\fi$ind\\sl%d\\slmult1$main::tighten",240*$spacing;
 }
 sub endpar {

@@ -349,7 +349,7 @@ for a in pres.files:
                     fw.write(out)
         finally:
             fw.close()
-    elif re.match(r'.*\.tex$',a):
+    elif re.match(r'.*\.(tex|java)$',a):
         with open(a,"r") as fd:
             for line in fd.readlines():
                 do_text(re.sub(r'\\\w+',' ',line))
