@@ -29,6 +29,17 @@ then
 else
     export PATH="$PATH:$PYTHONUSERBASE/bin"
 fi
+
+if [ -d ~/workenv/py ]
+then
+    export PYTHONPATH="$HOME/workenv/py:$PYTHONPATH"
+fi
+
+if [ -d ~/repos/workenv/py ]
+then
+    export PYTHONPATH="$HOME/repos/workenv/py:$PYTHONPATH"
+fi
+
 alias vi=vim
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
