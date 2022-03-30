@@ -7,6 +7,7 @@ my %bookmarks = (
     "book"=>["https://docs.google.com/document/d/1m9JrzgEkme9f3dtKI4xVZGeuUDtv50J2r-m_ZKB3L1Q/edit"],
     "git-token" => ["https://github.com/settings/tokens"],
     "ccano" => ["https://lsu.zoom.us/j/587215096"],
+    "print" => ["http://copier-4129.lsu.edu/print/print.php"],
     "zoom" => ["https://lsu.zoom.us/my/steverbrandt"],
     "dooleyzoom" => ["https://chapman.zoom.us/j/4445049264"],
     "karate" => ["https://lsu.zoom.us/j/3873703377?pwd=077883"],
