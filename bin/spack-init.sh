@@ -6,5 +6,5 @@ fi
 
 if [ ! -d "$SPACK_ROOT" ]
 then
-    git clone https://github.com/spack/spack.git "$SPACK_ROOT"
+    git clone --depth 1 https://github.com/spack/spack.git "$SPACK_ROOT"
 fi

@@ -62,8 +62,8 @@ packages:
   amrex:
       variants: +cuda cuda_arch=70 ~fortran +hdf5 +openmp +particles +shared
   boost:
-      variants: cxxstd=17 +context +mpi
-      version: [develop]
+      variants: cxxstd=17 +context +mpi +json
+      version: [1.77.0]
   hpctoolkit:
       variants: +cuda +mpi
   memkind:
@@ -107,13 +107,15 @@ fi
 ZLIB=$(spack find -dvl gcc@11.2.0|grep zlib|awk '{print $1}')
 
 spack load gcc
-if [ ! -r $ENV_DIR/spack.yaml ]
-then
-    for pkg in mpich hdf5 libjpeg openssl fftw papi gsl hwloc adios2 amrex boost cuda googletest gperftools kadath likwid memkind nsimd openblas openpmd-api petsc reprimand rnpletal simulationio ssht yaml-cpp gdb
-    do
+for pkg in mpich hdf5 libjpeg openssl fftw papi gsl hwloc adios2 amrex boost@1.77.0+json cuda googletest gperftools kadath likwid memkind nsimd openblas openpmd-api petsc reprimand rnpletal simulationio ssht yaml-cpp gdb
+do
+    if grep $pkg "$ENV_DIR/spack.yaml"
+    then
+        echo found $pkg
+    else
         spack --env-dir="$ENV_DIR" add $pkg ^zlib/$ZLIB
-    done
-fi
+    fi
+done
 
 if ! grep 'concretization: together' "$ENV_DIR/spack.yaml" >/dev/null 2>/dev/null
 then
