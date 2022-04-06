@@ -5,12 +5,10 @@ export GCC=9.3.0
 
 export HERE="$PWD/cactus-spack"
 export ENV_DIR="${HERE}/env"
-export DEV_DIR="${HERE}/dev"
 export SPACK_ROOT="${HERE}/root"
 export SPACK_USER_CONFIG_PATH="${HERE}/.spack"
 
 echo "ENV_DIR=${ENV_DIR}"
-echo "DEV_DIR=${DEV_DIR}"
 echo "SPACK_USER_CONFIG_PATH=${SPACK_USER_CONFIG_PATH}"
 echo "SPACK_ROOT=${SPACK_ROOT}"
 echo
@@ -27,12 +25,10 @@ then
 cat > env.sh << EOF
 export HERE="$PWD/cactus-spack"
 export ENV_DIR="${HERE}/env"
-export DEV_DIR="${HERE}/dev"
 export SPACK_ROOT="${HERE}/root"
 export SPACK_USER_CONFIG_PATH="${HERE}/.spack"
 
 echo "ENV_DIR=${ENV_DIR}"
-echo "DEV_DIR=${DEV_DIR}"
 echo "SPACK_USER_CONFIG_PATH=${SPACK_USER_CONFIG_PATH}"
 echo "SPACK_ROOT=${SPACK_ROOT}"
 echo
