@@ -67,7 +67,7 @@ packages:
   petsc:
       variants: +cuda +fftw +hwloc +openmp
   reprimand:
-      version: [develop]
+      version: [1.3]
   silo:
       version: [4.10.2-bsd]
   simulationio:
