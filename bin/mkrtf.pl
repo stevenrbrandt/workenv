@@ -27,6 +27,8 @@ sub fontzero {
 }
 
 my $use_toc = 0;
+my $qno = 6;
+my @opts = (); # for multiple choice tests
 
 ######################################
 # Configurables
@@ -38,7 +40,7 @@ my $inch = 1440.0; # twips per inch
 my $smartquote = 0;
 my $emdash = 0;
 my $ellipsis = 0;
-my $font_size = 12; 
+my $font_size = 11; 
 my $spacing = 1; 
 my $paperw = 6; # page width
 my $paperh = 9; # page height
@@ -97,6 +99,22 @@ sub setmode {
     $center_scene_brk = 0;
     ($marginl,$marginr,$margint,$marginb) = 
     (     1.0,     1.0,     1.0,     1.0);
+  } elsif($mode eq "test") {
+    print "TEST MODE ON\n";
+    $chapters_on = 1;
+    $italics_on = 1;
+    $spacing = 1;
+    $indent = 0;
+    $font_size = 12;
+    $font = "Courier New";
+    $notes_on = 0;
+    $bold_chapters = 0;
+    $chapter_lines=15;
+    $paperw = 8.5;
+    $paperh = 11.0;
+    $center_scene_brk = 0;
+    ($marginl,$marginr,$margint,$marginb) = 
+    (     0.5,     0.5,     0.5,     0.5);
   } elsif($mode eq "submit2") {
     print "SUBMIT MODE ON\n";
     $chapters_on = 0;
@@ -159,6 +177,8 @@ sub setmode {
     $paperh = 9;
     $notes_on = 0;
     $bold_chapters = 0;
+    ($marginl,$marginr,$margint,$marginb) = 
+    (     0.5,     0.5,     1.0,     0.5);
   } elsif($mode eq "edit") {
     print "EDIT MODE ON\n";
     $chapters_on = 1;
@@ -308,7 +328,7 @@ open($fdr,$infile) or die $infile;
 my $outfile = $infile;
 $outfile =~ s/\.txt$/.rtf/;
 fontzero($font);
-open($fdw,">$outfile") or die $outfile;
+open($fdw,">$outfile") or die "Could not open $outfile";
 print $fdw "{\\rtf1\\ansi\\deff0 {\\fonttbl \n";
 for my $fk (keys %fonts) {
     print $fdw "{\\f$fonts{$fk} ${fk};}\n";
@@ -347,6 +367,10 @@ while(<$fdr>) {
         $spacing = $1;
     } elsif(/<set-page-num=(\d+)>/) {
         print $fdw "\\pgnstarts$1\\pgnrestart";
+    } elsif(/<pagebreak>/) {
+          printf $fdw "{\\pard\\page\\par}\n";
+    } elsif(/<hr>/) {
+        print $fdw "{\\*\\do\\dobxcolumn\\dobypara\\dodhgt \\dpline\\dpxsize9200\\dplinesolid\\dplinew30}}";
     } elsif(/<(no)?chapter(?:="([^"]*)")?\s*(noskip)?(\s+sect|)>/) {
         my $title = $2;
         $title = accent($title);
@@ -393,6 +417,18 @@ while(<$fdr>) {
         #printf $fdw "{\\pard\\fs24\\sb%d \\par}",1440*$paperh*0.25;
         print $fdw "{\\pard \\par}\n" x ($1-1);
         startpar() unless($par);
+    } elsif(/<header3="([^"]*)">/) {
+        my @header = split(/\^\^/,$1);
+        print $fdw "{\\header{\\trowd";
+        my $del = ($paperw-0*$marginl-0*$marginr)/3*1440;
+        print "del=$del\n";
+        for(my $nn=1;$nn<=3;$nn++) {
+            printf $fdw "\\cellx%d", $del*$nn;
+        }
+        printf $fdw "\\pard\\intbl\ql %s \\cell", $header[0];
+        printf $fdw "\\pard\\intbl\qc %s \\cell", $header[1];
+        printf $fdw "\\pard\\intbl\qr %s \\cell", $header[2];
+        print $fdw "\\row}}\n";
     } elsif(/<header="([^"]*)"(?:\s+facing=(on|off))?>/) {
         $header = $1;
         my $facing = $2;
@@ -540,6 +576,48 @@ while(<$fdr>) {
         $par = 0;
     } elsif(/<heading="([^"]*)">/) {
         print $fdw "{\\pard\\qc $1 \\par}\n{\\pard \\par}\n";
+    } elsif(/<opt=(["'])(.*?)\1>/) {
+        push @opts, $2;
+    } elsif(/<endopt>/) {
+        my $let = "a";
+        for my $opt (@opts) {
+            die "Too many options @opts" if($let eq "f");
+            printf $fdw "{\\pard(%s) %s\\par}\n", $let, accent($opt);
+            $let++;
+        }
+        @opts = ();
+    } elsif(/<hendopt>/) {
+        ###
+        #my $left = $1;
+        #my $right = $3;
+        #my $sz = 2;
+        my $brdr = "\\clbrdrt\\brdrs\\clbrdrl\\brdrs\\clbrdrb\\brdrs\\clbrdrr\\brdrs";
+        #printf $fdw "{\\trowd$brdr\\cellx%d$brdr\\cellx%d\\pard\\intbl\\qc %s\\cell\\pard\\intbl\\qc %s\\cell\\row}\n",0.5*1440.0*($sz),1440.0*($sz),$left,$right;
+        ###
+        my $let = "a";
+        #print $fdw "{\\pard ";
+        print $fdw "{\\trowd";
+        my $nn=1;
+        my $del = ($paperw-$marginl-2*$marginr)/($#opts+1)*1440;
+        print "del=$del\n";
+        for my $opt (@opts) {
+            printf $fdw "$brdr\\cellx%d", $del*$nn;
+            $nn++;
+        }
+        for my $opt (@opts) {
+            die "Too many options @opts" if($let eq "f");
+            printf $fdw "\\pard\\intbl (%s) %s \\cell", $let, accent($opt);
+            #printf $fdw "{\\b (%s)} %s  ", $let, accent($opt);
+            $let++;
+        }
+        print $fdw "\\row}\n";
+        @opts = ();
+    } elsif(/<tab="([^"]*)"( +right="([^"]*)")?>/) {
+        my $left = $1;
+        my $right = $3;
+        my $sz = 2;
+        my $brdr = "\\clbrdrt\\brdrs\\clbrdrl\\brdrs\\clbrdrb\\brdrs\\clbrdrr\\brdrs";
+        printf $fdw "{\\trowd$brdr\\cellx%d$brdr\\cellx%d\\pard\\intbl\\qc %s\\cell\\pard\\intbl\\qc %s\\cell\\row}\n",0.5*1440.0*($sz),1440.0*($sz),$left,$right;
     } elsif(/<line="([^"]*)"( +right="([^"]*)")?>/) {
         my $left = $1;
         my $right = $3;
@@ -569,7 +647,7 @@ while(<$fdr>) {
     } elsif(/<font=.*>/) {
       ;
     } elsif(/^\s*<[\w-]+(="[^"]*")?>\s*$/) {
-        die "undefined control ".$&;
+        die "undefined control ".$&." on line $.";
     } elsif(/^\s*$/) {
         if($par) {
             endpar();
@@ -582,7 +660,9 @@ while(<$fdr>) {
         }
         startpar() unless($par);
         my $line = $_;
+        my $qsav = $qno;
         my $buf = accent($_);
+        $qno = $qsav;
         $buf =~ s/<[^>]*>//g;
         while($buf =~ /(\\?)[A-Za-z_'-]+/g) {
           next if($1 eq "\\");
@@ -672,10 +752,16 @@ sub altquote
     return "{\\rdblquote}";
   }
 }
+
+sub qnum {
+    return sprintf("{\\b Question %d:}",$qno++);
+}
 # https://www.safaribooksonline.com/library/view/rtf-pocket-guide/9781449302047/ch04.html
 sub accent {
   my $txt = shift;
   my $count = 0;
+  $txt =~ s/\{/\\’7b/g;
+  $txt =~ s/\}/\\’7d/g;
   $txt =~ s/\\+'e/\\u233\\'e9/g;
   $txt =~ s/<'e>/\\u233\\'e9/g;
   $txt =~ s/<'a>/\\u225\\'e1/g;
@@ -699,6 +785,12 @@ sub accent {
   $txt =~ s/é/\\u233\\'e9/g;
   $txt =~ s/ó/\\u243\\'f3/g;
   $txt =~ s/¿/\\u191\\'bf/g;
+  $txt =~ s/<q>/qnum()/ge;
+  $txt =~ s/<qno>/$qno/ge;
+  $txt =~ s/<qno1>/1+$qno/ge;
+  $txt =~ s/\^\^/\\par}{\\pard    /g;
+  $txt =~ s/“/"/g;
+  $txt =~ s/”/"/g;
 
   $txt =~ s/’/'/g;
   $txt =~ s/‘/'/g;
