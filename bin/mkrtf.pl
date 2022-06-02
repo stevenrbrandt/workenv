@@ -334,6 +334,7 @@ for my $fk (keys %fonts) {
     print $fdw "{\\f$fonts{$fk} ${fk};}\n";
 }
 print $fdw "}\\fs$fs\n";
+print $fdw "{\\colortbl;\\red0\\green0\\blue0;\\red0\\green155\\blue0;\\red255\\green0\\blue0;}\n";
 printf $fdw "\\margl%d\\margr%d\\margt%d\\margb%d\\gutter%d ",$mll,$mlr,$mlt,$mlb,$gutter*1440.0+.5;
 printf $fdw "\\paperw%d\\paperh%d",$paperw*1440.0,$paperh*1440.0;
 print $fdw "{\\sectd ";
@@ -677,6 +678,10 @@ while(<$fdr>) {
           s/<i>/\\ul /g;
           s/<\/i>/\\ul0 /g;
         }
+        s/<n>/{\\cf2 /g;
+        s/<\/n>/}/g;
+        s/<o>/{\\cf3 /g;
+        s/<\/o>/}/g;
         s(<a href='([^']*)'>([^<]*)</a>)({\\field{\\*\\fldinst HYPERLINK \\\\l \"$1\"}{\\fldrslt $2}}); # yyy
         s/<c>/\\qc /g;
         s/<b>/\\b /g;
@@ -695,6 +700,9 @@ while(<$fdr>) {
             $firstletter = 0;
             my $bfs = int($fs*1.5);
             s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
+            #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\dropcapli2\\dropcapt1\\fs${bfs} $&}/;
+            #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/\\dropcap2 $&/;
+            #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\pvpara\\wraparound\\dropcapli2\\dropcapt1{$&}}/;
         }
         print $fdw $_;
     }
@@ -760,8 +768,8 @@ sub qnum {
 sub accent {
   my $txt = shift;
   my $count = 0;
-  $txt =~ s/\{/\\’7b/g;
-  $txt =~ s/\}/\\’7d/g;
+  #$txt =~ s/\{/\\’7b/g;
+  #$txt =~ s/\}/\\’7d/g;
   $txt =~ s/\\+'e/\\u233\\'e9/g;
   $txt =~ s/<'e>/\\u233\\'e9/g;
   $txt =~ s/<'a>/\\u225\\'e1/g;
@@ -784,8 +792,11 @@ sub accent {
   $txt =~ s/ñ/\\u241\\'f1/g;
   $txt =~ s/é/\\u233\\'e9/g;
   $txt =~ s/ó/\\u243\\'f3/g;
+  # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
   $txt =~ s/<q>/qnum()/ge;
+  # https://www.compart.com/en/unicode/U+0119
+  $txt =~ s/ę/\\u281\\'99/g;
   $txt =~ s/<qno>/$qno/ge;
   $txt =~ s/<qno1>/1+$qno/ge;
   $txt =~ s/\^\^/\\par}{\\pard    /g;
