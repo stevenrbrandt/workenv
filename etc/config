@@ -1,0 +1,312 @@
+Host *
+    ServerAliveInterval 300
+    ServerAliveCountMax 2
+Host openstack
+    hostname 129.114.104.72
+    user ubuntu
+    identityfile ~/.ssh/openstack-id_rsa
+Host chemora
+    hostname chemoracode.cct.lsu.edu
+    user sbrandt
+    port 2525
+Host smic
+    hostname smic.hpc.lsu.edu
+    user sbrandt
+    forwardx11 yes
+    localforward 127.0.1.5:2222 mike5.hpc.lsu.edu:22
+Host shelob
+    remoteforward 127.0.0.1:6000 127.0.0.1:6000
+    hostname shelob.hpc.lsu.edu
+    forwardx11 yes
+    localforward 127.0.0.1:2229 spine.cct.lsu.edu:2525
+Host smic3
+    hostname 127.0.1.10
+    port 2222
+Host qb3
+    hostname qbc.loni.org
+Host zuma
+    user sbrandt
+    hostname stevenrbrandt.com
+Host mike1
+    user sbrandt
+    hostname mike1.hpc.lsu.edu
+Host gold03
+    hostname gold03.hpc.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no mikeb5.hpc.lsu.edu nc %h %p 2> /dev/null
+Host gold04
+    hostname gold04.hpc.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no mikeb5.hpc.lsu.edu nc %h %p 2> /dev/null
+Host mike5
+    user sbrandt
+    hostname mike5.hpc.lsu.edu
+Host mike
+    user sbrandt
+    hostname mike.hpc.lsu.edu
+Host qb
+    hostname qb.loni.org
+Host qb2
+    hostname qb2.loni.org
+    forwardx11 yes
+Host ranger
+    user tg457049
+    hostname tg-login.ranger.tacc.teragrid.org
+Host delta
+    hostname delta-login.cct.lsu.edu
+Host classes
+    user cs1351_bra
+    hostname classes.csc.lsu.edu
+Host mclbatonrouge
+    user sbrandt
+    hostname mclbatonrouge.org
+Host bounce
+    hostname bounce.cct.lsu.edu
+    stricthostkeychecking no
+    userknownhostsfile /dev/null
+    user sbrandt
+    port 2525
+Host vault
+    hostname vault.cct.lsu.edu
+    user sbrandt
+Host vault.cct
+    hostname vault.cct.lsu.edu
+    forwardx11 No
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etkmain
+    hostname einsteintoolkit.org
+    port 2525
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host bit
+    hostname bit.csc.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host agave2
+    hostname 130.39.21.197
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    localforward 127.0.0.1:7043 agave2.cct.lsu.edu:443
+    dynamicforward 8123
+Host mel5
+    hostname melete05.cct.lsu.edu
+    port 2526
+    remoteforward 127.0.0.1:6000 127.0.0.1:6000
+    localforward 127.0.0.1:2443 127.0.0.1:2443
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host relay
+    hostname melete05.cct.lsu.edu
+    port 2526
+    #remoteforward 127.0.0.1:6000 127.0.0.1:6000
+    localforward 8587 relay.lsu.edu:587
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host melete05
+    hostname melete05.cct.lsu.edu
+    port 2526
+    user sbrandt2
+    localforward 127.0.0.1:8003 127.0.0.1:8003
+    forwardx11 yes
+Host spine
+    hostname spine.cct.lsu.edu
+    port 2525
+    localforward 127.0.0.1:8789 127.0.0.1:8789
+Host bakery4
+    hostname 167.96.144.216
+    user pi
+    port 22
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host bakery3
+    hostname 167.96.143.253
+    user pi
+    port 22
+Host pibakery
+    user pi
+    hostname 167.96.131.146
+    forwardx11 yes
+Host tanks
+    hostname tanks.cct.lsu.edu
+    port 2525
+Host steam
+    hostname steam.cct.lsu.edu
+    user sbrandt
+    port 2525
+Host rostam
+    remoteforward 127.0.0.1:6000 127.0.0.1:6000
+    hostname rostam.cct.lsu.edu
+Host rostam2
+    hostname rostam2.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host jupyter.cct
+    hostname 127.0.1.7
+    port 2222
+Host jupyter
+    hostname jupyter.cct.lsu.edu
+    port 2525
+Host bw
+    hostname bwbay.ncsa.illinois.edu
+    user instr042
+Host trac
+    hostname trac.einsteintoolkit.org
+    port 2525
+    localforward 127.0.0.1:8443 127.0.0.1:443
+Host trac.cct
+    hostname trac.einsteintoolkit.org
+    port 2525
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host new-cactuscode
+    hostname cactuscode-20180221.cct.lsu.edu
+    port 2525
+    localforward localhost:8055 localhost:80
+Host new-etk
+    hostname einsteintoolkit.org
+    port 2525
+Host new-etk.cct
+    hostname 130.39.21.27
+    port 2525
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host old-etk
+    hostname 130.39.21.31
+    localforward localhost:8001 localhost:8001
+Host tornado
+    hostname tornado.ece.lsu.edu
+Host manifold
+    hostname manifold.ece.lsu.edu
+Host andromeda
+    hostname andromeda.ece.lsu.edu
+    forwardx11 yes
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etkhub
+    user ubuntu
+    hostname etkhub.ndslabs.org
+Host einsteintoolkit.org
+    user sbrandt
+    port 2525
+Host docs
+    hostname docs.einsteintoolkit.org
+    user sbrandt
+    port 2525
+Host osg
+    hostname training.osgconnect.net
+    user osguser08
+Host rpi0001
+    user pi
+    hostname 167.96.141.172
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host rpi0002
+    user pi
+    hostname 167.96.136.203
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host rpi0003
+    user pi
+    hostname 167.96.146.214
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host rpi0004
+    user pi
+    hostname 167.96.159.225
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host agave
+    user sbrandt
+    hostname agave.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etk
+    user brandt
+    hostname etk.cct.lsu.edu
+    localforward 127.0.0.1:1443 127.0.0.1:443
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etkall
+    hostname bounce.cct.lsu.edu
+    stricthostkeychecking no
+    userknownhostsfile /dev/null
+    user sbrandt
+    port 2525
+    localforward 127.0.0.1:4443 etk4.cct.lsu.edu:443
+Host etk1
+    user brandt
+    hostname etk1.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etk2
+    user brandt
+    hostname etk2.cct.lsu.edu
+    localforward 127.0.0.1:2443 etk2.cct.lsu.edu:443
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host hpxtut
+    user brandt
+    hostname hpx-tutorial.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etk3
+    user brandt
+    hostname etk3.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host etk4
+    user brandt
+    hostname etk4.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host crc
+    user sbrandt
+    hostname crc.cct.lsu.edu
+    port 2525
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host qbc
+    user sbrandt
+    hostname qbc.loni.org
+Host db
+    user sbrandt
+    hostname db1.hpc.lsu.edu
+Host coldfront
+    user sbrandt
+    localforward 127.0.0.1:8889 127.0.0.1:8889
+    hostname qbc191.loni.org
+    proxycommand ssh -oStrictHostKeyChecking=no qbc nc %h %p 2> /dev/null
+Host qb4
+    user sbrandt
+    hostname qb4.loni.org
+Host qbc3
+    user sbrandt
+    hostname qbc3.loni.org
+    proxycommand ssh -oStrictHostKeyChecking=no qb4 nc %h %p 2> /dev/null
+Host jenkins-osx-homebrew
+    user jenkins
+    port 20023
+    hostname gdd6l52n-ofc.ncsa.illinois.edu
+    identityfile ~/.ssh/id_rsa
+Host jenkins-osx-macports
+    user jenkins
+    port 20022
+    hostname gdd6l52n-ofc.ncsa.illinois.edu
+    identityfile ~/.ssh/id_rsa
+Host csc4585
+    user sbrandt
+    hostname csc4585.cct.lsu.edu
+    localforward 127.0.0.1:8443 127.0.0.1:443
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host k8s01
+    user sbrandt
+    hostname agave-k8s-01.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host k8s02
+    user sbrandt
+    hostname agave-k8s-02.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host k8s03
+    user sbrandt
+    hostname agave-k8s-03.cct.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+Host perlmutter
+    user sbrandt
+    hostname saul-p1.nersc.gov
+    identityfile ~/.ssh/nersc
+Host ascent
+    user sbrandt
+    hostname login1.ascent.olcf.ornl.gov
+Host db1.hpc.lsu.edu
+    stricthostkeychecking no
+Host cmrhub
+    Hostname cmrhub.cct.lsu.edu
+    User sbrandt
+    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    localforward 127.0.0.1:6443 127.0.0.1:443
+    port 2525
+Host hub
+    Hostname 34.69.134.134
+    Port 2222
+    #localforward 127.0.0.1:3443 127.0.0.1:6443
+    User sbrandt
+Host hub2
+    Hostname 34.69.134.134
+    Port 2222
+    User sbrandt2
