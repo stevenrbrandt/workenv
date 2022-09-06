@@ -1,7 +1,55 @@
 #!/usr/bin/perl
 use strict;
 use FileHandle;
-use Lingua::EN::Numbers qw(num2en num2en_ordinal);
+# use Lingua::EN::Numbers qw(num2en num2en_ordinal);
+
+sub num2en {
+    my $arg = shift;
+    die if($arg > 10000);
+    die if($arg <= 0);
+    my $s = "";
+    while($arg >= 1000) {
+        $arg -= 1000;
+        $s .= "M";
+    }
+    if($arg >= 900) {
+        $arg -= 900;
+        $s .= "CM";
+    }
+    if($arg >= 500) {
+        $arg -= 500;
+        $s .= "D";
+    }
+    while($arg >= 100) {
+        $arg -= 100;
+        $s .= "C";
+    }
+    if($arg >= 90) {
+        $arg -= 90;
+        $s .= "XC";
+    }
+    if($arg >= 50) {
+        $arg -= 50;
+        $s .= "L";
+    }
+    while($arg >= 10) {
+        $arg -= 10;
+        $s .= "X";
+    }
+    if($arg >= 9) {
+        $arg -= 9;
+        $s .= "IX";
+    }
+    if($arg >= 5) {
+        $arg -= 5;
+        $s .= "V";
+    }
+    while($arg > 0) {
+        $arg -= 1;
+        $s .= "I";
+    }
+    return $s;
+}
 
 # NOTE: Hit F9 to update PAGEREFs
 
