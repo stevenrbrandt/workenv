@@ -41,7 +41,7 @@ parser.add_argument('--ascii-db', action='store_true', default=False, help='Writ
 pres=parser.parse_args(sys.argv[1:])
 
 tmout = pres.tmout
-words_db = os.environ["HOME"]+"/.pyspell.sqlite3"
+words_db = os.path.join(os.environ["HOME"],"LSUOneDrive",".pyspell.sqlite3")
 
 conn = sqlite3.connect(words_db)
 cursor = conn.cursor()

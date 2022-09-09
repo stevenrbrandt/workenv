@@ -32,13 +32,10 @@ Host mike1
     hostname mike1.hpc.lsu.edu
 Host gold03
     hostname gold03.hpc.lsu.edu
-    proxycommand ssh -oStrictHostKeyChecking=no mikeb5.hpc.lsu.edu nc %h %p 2> /dev/null
+    proxycommand ssh -oStrictHostKeyChecking=no mike4.hpc.lsu.edu nc %h %p 2> /dev/null
 Host gold04
     hostname gold04.hpc.lsu.edu
-    proxycommand ssh -oStrictHostKeyChecking=no mikeb5.hpc.lsu.edu nc %h %p 2> /dev/null
-Host mike5
-    user sbrandt
-    hostname mike5.hpc.lsu.edu
+    proxycommand ssh -oStrictHostKeyChecking=no mike4.hpc.lsu.edu nc %h %p 2> /dev/null
 Host mike
     user sbrandt
     hostname mike.hpc.lsu.edu

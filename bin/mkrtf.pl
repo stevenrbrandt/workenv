@@ -372,7 +372,7 @@ while(<$fdr>) {
           printf $fdw "{\\pard\\page\\par}\n";
     } elsif(/<hr>/) {
         print $fdw "{\\*\\do\\dobxcolumn\\dobypara\\dodhgt \\dpline\\dpxsize9200\\dplinesolid\\dplinew30}}";
-    } elsif(/<(no)?chapter(?:="([^"]*)")?\s*(noskip)?(\s+sect|)>/) {
+    } elsif(/<(no)?chapter(?:="([^"]*)")?\s*(noskip)?(\s+sect|)(\s*chno=(\d+)|)>/) {
         my $title = $2;
         $title = accent($title);
         my $noskip = $3;
@@ -381,6 +381,9 @@ while(<$fdr>) {
           print $fdw "\\sect}{\\sectd\n";
         } else {
           printf $fdw "{\\pard\\page\\par}\n" unless(defined($noskip));
+        }
+        if($6 ne "") {
+            $chapter = 1*$6;
         }
         if($1 eq "no") {
             ;#$chapter++;
