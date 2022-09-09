@@ -97,6 +97,7 @@ syn on
 if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif
 endif
+set ambw=double 
 """.format(here=here),file=fd)
 
 vim_dir = os.path.join(home, ".vim", "colors")

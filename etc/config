@@ -220,7 +220,14 @@ Host etk2
     user brandt
     hostname etk2.cct.lsu.edu
     localforward 127.0.0.1:2443 etk2.cct.lsu.edu:443
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    proxycommand ssh -oStrictHostKeyChecking=no bouncem nc %h %p 2> /dev/null
+Host bouncem
+    HostName bounce.cct.lsu.edu
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    user sbrandt
+    port 2525
+    proxyJump mike
 Host hpxtut
     user brandt
     hostname hpx-tutorial.cct.lsu.edu

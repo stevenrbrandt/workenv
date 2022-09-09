@@ -3,6 +3,7 @@ use Cwd;
 
 my %bookmarks = (
     #"zoom" => ["https://lsu.zoom.us/j/631356683"],
+    "gitter"=>["https://gitter.im/EinsteinToolkit/EinsteinToolkit"],
     "carpetx"=>["https://bitbucket.org/eschnett/cactusamrex/wiki/To%20Do%20List"],
     "printer"=>["https://10.20.106.20/stat/welcome.php?tab=status"],
     "book"=>["https://docs.google.com/document/d/1m9JrzgEkme9f3dtKI4xVZGeuUDtv50J2r-m_ZKB3L1Q/edit"],
