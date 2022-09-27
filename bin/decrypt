@@ -1,6 +1,9 @@
 if [[ ~/LSUOneDrive/todo.txt.gpg -nt /tmp/todo.txt ]]
 then
+    touch /tmp/todo.txt
+    cp /tmp/todo.txt /tmp/todo-sav.txt
     gpg -o /tmp/todo.txt -d ~/LSUOneDrive/todo.txt.gpg
+    vimdiff /tmp/todo.txt /tmp/todo-sav.txt
 else
     echo already decrypted
 fi
