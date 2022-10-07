@@ -3,6 +3,10 @@ use strict;
 use FileHandle;
 my $fd = new FileHandle;
 my $sum = 0;
+my $off = 0;
+if($#ARGV >= 0) {
+    $off=1*$ARGV[0];
+}
 open($fd,"toc.txt");
 while(<$fd>) {
   chomp;
@@ -19,6 +23,10 @@ while(my $line=<$fd>) {
   chomp($line);
   if($line=~/(\d+)$/) {
     $sum2 += 1*$1;
+  }
+  if($line =~ /^Ch: +(\d+),/) {
+     my $n = $off + $1;
+     $line = sprintf("Ch:%3d,%s",$n,$');
   }
   printf("%s %6.0f %10.0f\n",$line,100.0*$sum2/$sum,$sum2);
 }
