@@ -602,7 +602,7 @@ while(<$fdr>) {
         my ($width,$height)=($1,$2);
         $mag = 14.4 unless(defined($mag));
         my ($goalw,$goalh)=(int($mag*$width),int($mag*$height));
-        print $fdw '{\pard\qc{\shppict{\pict\picw',$width,'\pich',$height,'\picwgoal',$goalw,'\pichgoal',$goalh,'\pngblp ';
+        print $fdw '{\pard\qc{\shppict{\pict\picw',$width,'\pich',$height,'\picwgoal',$goalw,'\pichgoal',$goalh,'\pngblip ';
         open($fdi,$imgfile) or die $imgfile;
         binmode($fdi);
         my $buf;
