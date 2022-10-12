@@ -750,7 +750,7 @@ while(<$fdr>) {
             #die $_; yyy
             $firstletter = 0;
             #my $bfs = int($fs*1.5);
-            my $nlines = 2;
+            my $nlines = 3;
             my $dcspace = int(758*$nlines/3*$fs/22);
             my $dcfs = int(100*$nlines/3*$fs/22);
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
