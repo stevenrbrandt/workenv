@@ -848,6 +848,8 @@ sub accent {
   $txt =~ s/<q>/qnum()/ge;
   # https://www.compart.com/en/unicode/U+0119
   $txt =~ s/ę/\\u281\\'99/g;
+  $txt =~ s/î/\\u238\\'ae/g;
+  $txt =~ s/á/\\u225\\'a1/g;
   $txt =~ s/<qno>/$qno/ge;
   $txt =~ s/<qno1>/1+$qno/ge;
   $txt =~ s/\^\^/\\par}{\\pard    /g;
