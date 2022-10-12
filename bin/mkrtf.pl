@@ -749,8 +749,12 @@ while(<$fdr>) {
         if($firstletter) {
             #die $_; yyy
             $firstletter = 0;
-            my $bfs = int($fs*1.5);
-            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
+            #my $bfs = int($fs*1.5);
+            my $nlines = 2;
+            my $dcspace = int(758*$nlines/3*$fs/22);
+            my $dcfs = int(100*$nlines/3*$fs/22);
+            #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
+            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\ltrpar\\ql \\li0\\ri0\\sl-$dcspace\\slmult0\\keepn\\widctlpar\\pvpara\\wraparound\\dropcapli3\\dropcapt1\\faroman\\adjustright{\\rtlch\\fcs1 \\af0 \\ltrch\\fcs0 \\f0\\fs$dcfs\\dn9 \\hich\\af0\\dbch\\loch\\f0 $& \\par}}/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\dropcapli2\\dropcapt1\\fs${bfs} $&}/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/\\dropcap2 $&/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\pvpara\\wraparound\\dropcapli2\\dropcapt1{$&}}/;
