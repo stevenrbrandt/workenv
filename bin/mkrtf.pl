@@ -737,8 +737,9 @@ while(<$fdr>) {
         s/<c>/\\qc /g;
         s/<b>/\\b /g;
         s/<trade>/{\\'99}/g;
-        s/<copyright>/{\\'a9}/g;
-        s/©/{\\'a9}/g;
+        #s/<copyright>/{\\'a9}/g;
+        #s/©/{\\'a9}/g;
+        s/©/{\\u169\\'a9}/g;
         s/<\/b>/\\b0 /g;
         $_ = accent($_);
         #s/--/{\\u8212}/g if($emdash);
@@ -754,7 +755,8 @@ while(<$fdr>) {
             my $dcspace = int(758*$nlines/3*$fs/22);
             my $dcfs = int(100*$nlines/3*$fs/22);
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
-            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\ltrpar\\ql \\li0\\ri0\\sl-$dcspace\\slmult0\\keepn\\widctlpar\\pvpara\\wraparound\\dropcapli3\\dropcapt1\\faroman\\adjustright{\\rtlch\\fcs1 \\af0 \\ltrch\\fcs0 \\f0\\fs$dcfs\\dn9 \\hich\\af0\\dbch\\loch\\f0 $& \\par}}/;
+            #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\ltrpar\\ql \\li0\\ri0\\sl-$dcspace\\slmult0\\keepn\\widctlpar\\pvpara\\wraparound\\dropcapli3\\dropcapt1\\faroman\\adjustright{\\rtlch\\fcs1 \\af0 \\ltrch\\fcs0 \\f0\\fs$dcfs\\dn9 \\hich\\af0\\dbch\\loch\\f0 $& \\par}}/;
+            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\li0\\ri0\\sl-$dcspace\\wraparound\\dropcapli3\\dropcapt1{\\fs$dcfs \\f0 $& \\par}}/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\dropcapli2\\dropcapt1\\fs${bfs} $&}/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/\\dropcap2 $&/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\pvpara\\wraparound\\dropcapli2\\dropcapt1{$&}}/;
