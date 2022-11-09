@@ -23,7 +23,9 @@ user_id = os.getuid()
 pw = pwd.getpwuid(user_id)
 user_name = pw.pw_name
 here = os.getcwd()
-dir_name = "/usr/mnt"
+
+# The directory to use inside the shell
+dir_name = here #"/usr/mnt"
 
 cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d {dir_name} > /dev/null; su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1)"]
 print(cmd)
