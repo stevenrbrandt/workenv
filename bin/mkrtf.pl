@@ -83,6 +83,7 @@ my @opts = (); # for multiple choice tests
 ######################################
 
 my $center_scene_brk = 1;
+my $dropcap = 0;
 my $mm = 56.692913386/1440.0; # twips per millimeter
 my $inch = 1440.0; # twips per inch
 my $smartquote = 0;
@@ -212,8 +213,24 @@ sub setmode {
     $notes_on = 0;
     $bold_chapters = 0;
     $indent = 0;
+  } elsif($mode eq "pigsty") {
+    $dropcap = 1;
+    $chapters_on = 0;
+    $italics_on = 1;
+    $emdash = 1;
+    $spacing = 1;
+    $font_size = 12;
+    $smartquote=1;
+    $font = "Arial";
+    $paperw = 6;
+    $paperh = 9;
+    $notes_on = 0;
+    $bold_chapters = 0;
+    ($marginl,$marginr,$margint,$marginb) = 
+    (     0.5,     0.5,     1.0,     0.5);
   } elsif($mode eq "story") {
     print "STORY MODE ON\n";
+    $dropcap = 1;
     $chapters_on = 1;
     $italics_on = 1;
     $emdash = 1;
@@ -753,14 +770,15 @@ while(<$fdr>) {
             #my $bfs = int($fs*1.5);
             my $nlines = 3;
             my $dcspace = int(758*$nlines/3*$fs/22);
-            my $dcfs = int(100*$nlines/3*$fs/22);
+            my $dcfs = int(80*$nlines/3*$fs/22);
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\fs${bfs} $&}/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\ltrpar\\ql \\li0\\ri0\\sl-$dcspace\\slmult0\\keepn\\widctlpar\\pvpara\\wraparound\\dropcapli3\\dropcapt1\\faroman\\adjustright{\\rtlch\\fcs1 \\af0 \\ltrch\\fcs0 \\f0\\fs$dcfs\\dn9 \\hich\\af0\\dbch\\loch\\f0 $& \\par}}/;
-            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\li0\\ri0\\sl-$dcspace\\wraparound\\dropcapli3\\dropcapt1{\\fs$dcfs \\f0 $& \\par}}/;
+            s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\li0\\ri0\\sl-$dcspace\\wraparound\\dropcapli3\\dropcapt1{\\fs$dcfs \\f0 $& \\par}}/ if($dropcap);
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\dropcapli2\\dropcapt1\\fs${bfs} $&}/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/\\dropcap2 $&/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\pvpara\\wraparound\\dropcapli2\\dropcapt1{$&}}/;
         }
+        die "($`)$&($'): $_" if ($_ =~ /[\x80-\xFF]/);
         print $fdw $_;
     }
 }
@@ -843,19 +861,20 @@ sub accent {
   $txt =~ s/''/{\\rdblquote}/g;
   $txt =~ s/\\?"/altquote(\$count)/ge if($smartquote);
   $txt =~ s/--/{\\emdash}/g if($emdash);
-  $txt =~ s/ō/\\u333\\'3f/g;
-  $txt =~ s/ū/\\u363\\'3f/g;
   $txt =~ s/ā/\\u257\\'3f/g;
-  $txt =~ s/ñ/\\u241\\'f1/g;
+  $txt =~ s/á/\\u225\\'a1/g;
   $txt =~ s/é/\\u233\\'e9/g;
+  $txt =~ s/ę/\\u281\\'99/g;
+  $txt =~ s/î/\\u238\\'ae/g;
+  $txt =~ s/ï/\\u239\\'af/g;
+  $txt =~ s/ō/\\u333\\'3f/g;
   $txt =~ s/ó/\\u243\\'f3/g;
+  $txt =~ s/ū/\\u363\\'3f/g;
+  $txt =~ s/ñ/\\u241\\'f1/g;
   # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
   $txt =~ s/<q>/qnum()/ge;
   # https://www.compart.com/en/unicode/U+0119
-  $txt =~ s/ę/\\u281\\'99/g;
-  $txt =~ s/î/\\u238\\'ae/g;
-  $txt =~ s/á/\\u225\\'a1/g;
   $txt =~ s/<qno>/$qno/ge;
   $txt =~ s/<qno1>/1+$qno/ge;
   $txt =~ s/\^\^/\\par}{\\pard    /g;
