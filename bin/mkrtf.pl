@@ -44,6 +44,10 @@ sub num2en {
         $arg -= 5;
         $s .= "V";
     }
+    if($arg >= 4) {
+        $arg -= 4;
+        $s .= "IV"
+    }
     while($arg > 0) {
         $arg -= 1;
         $s .= "I";
@@ -471,7 +475,7 @@ while(<$fdr>) {
                 }
             } else {
                 my $chap_str = num2en($chapter);
-                $chap_str =~ s/\w+/\L\u$&/g;
+                $chap_str =~ s/\w+/\U$&/g;
                 print $fdw "{\\pard\\qc Chapter $chap_str \\par}\n";
             }
             print $fdw "\\b0 " if($bold_chapters);
