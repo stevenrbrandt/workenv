@@ -54,6 +54,9 @@ if($#ARGV==1) {
 }
 my $fd = new FileHandle;
 open($fd,$file) or die "could not open file ($file)";
+my $max_num = 0;
+while(<$fd>) { $max_num++; }
+open($fd,$file) or die "could not open file ($file)";
 my $num = 0;
 my %shown = ();
 while(my $line = <$fd>) {
@@ -74,7 +77,7 @@ while(my $line = <$fd>) {
     open($f1,">last_line.txt") or die;
     if($line =~ /^\s*<(chapter|end|scene)/) {
       print "\nLast line $num\n";
-      print "Next chapter: $'\n";
+      print "Next $&: $'\n";
       print $f1 sprintf("%s %d\n",$file,$num+1);
       close($f1);
       last;
@@ -84,7 +87,8 @@ while(my $line = <$fd>) {
     }
     #$line =~ s/<[^>]*>//g;
     my $li = new FileHandle;
-    print "(",$num,")","=" x 50,"\n";
+    my $per = sprintf "%.2f", 100*$num/$max_num;
+    print "(",$num,", ",$per,"%)","=" x 50,"\n";
     my @repeats = keys %shown;
     if($#repeats >= 0) {
       my $rp = new FileHandle;
