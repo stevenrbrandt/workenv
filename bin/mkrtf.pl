@@ -90,6 +90,7 @@ my $center_scene_brk = 1;
 my $dropcap = 0;
 my $mm = 56.692913386/1440.0; # twips per millimeter
 my $inch = 1440.0; # twips per inch
+my $dropcap = 0;
 my $smartquote = 0;
 my $emdash = 0;
 my $ellipsis = 0;
@@ -876,6 +877,7 @@ sub accent {
   $txt =~ s/ó/\\u243\\'f3/g;
   $txt =~ s/ū/\\u363\\'3f/g;
   $txt =~ s/ñ/\\u241\\'f1/g;
+  $txt =~ s/ī/\\u299\\'ab/g;
   # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
   $txt =~ s/<q>/qnum()/ge;

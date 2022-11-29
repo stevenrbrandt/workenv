@@ -14,7 +14,7 @@ import sys
 from subprocess import call
 import pwd
 
-if len(sys.argv) != 2:
+if len(sys.argv) < 1:
     print("Usage: "+sys.argv[0]+" docker-image")
     exit(2)
 
@@ -26,7 +26,11 @@ here = os.getcwd()
 
 # The directory to use inside the shell
 dir_name = here #"/usr/mnt"
+if len(sys.argv) > 1:
+    args = " ".join(sys.argv[2:])
+else:
+    args = ""
 
-cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d {dir_name} > /dev/null; su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1)"]
+cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d {dir_name} > /dev/null; su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1) {args}"]
 print(cmd)
 call(cmd)
