@@ -218,7 +218,7 @@ sub setmode {
     $bold_chapters = 0;
     $indent = 0;
   } elsif($mode eq "pigsty") {
-    $dropcap = 1;
+    $dropcap = 0;
     $chapters_on = 0;
     $italics_on = 1;
     $emdash = 1;
@@ -869,6 +869,7 @@ sub accent {
   $txt =~ s/á/\\u225\\'a1/g;
   $txt =~ s/é/\\u233\\'e9/g;
   $txt =~ s/ę/\\u281\\'99/g;
+  $txt =~ s/ê/\\u234\\'aa/g;
   $txt =~ s/î/\\u238\\'ae/g;
   $txt =~ s/ï/\\u239\\'af/g;
   $txt =~ s/ō/\\u333\\'3f/g;
