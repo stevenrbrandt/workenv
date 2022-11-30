@@ -31,6 +31,6 @@ if len(sys.argv) > 1:
 else:
     args = ""
 
-cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d {dir_name} > /dev/null; su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1) {args}"]
+cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d '{dir_name}' > /dev/null; su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1) {args}"]
 print(cmd)
 call(cmd)
