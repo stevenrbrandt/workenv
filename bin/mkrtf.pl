@@ -233,6 +233,21 @@ sub setmode {
     $bold_chapters = 0;
     ($marginl,$marginr,$margint,$marginb) = 
     (     0.5,     0.5,     1.0,     0.5);
+  } elsif($mode eq "pigstyd") {
+    $dropcap = 1;
+    $chapters_on = 0;
+    $italics_on = 1;
+    $emdash = 1;
+    $spacing = 1;
+    $font_size = 12;
+    $smartquote=1;
+    $font = "Arial";
+    $paperw = 6;
+    $paperh = 9;
+    $notes_on = 0;
+    $bold_chapters = 0;
+    ($marginl,$marginr,$margint,$marginb) = 
+    (     0.5,     0.5,     1.0,     0.5);
   } elsif($mode eq "story") {
     print "STORY MODE ON\n";
     $dropcap = 1;
@@ -878,6 +893,7 @@ sub accent {
   $txt =~ s/ū/\\u363\\'3f/g;
   $txt =~ s/ñ/\\u241\\'f1/g;
   $txt =~ s/ī/\\u299\\'ab/g;
+  $txt =~ s/ć/\\u263\\'87/g;
   # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
   $txt =~ s/<q>/qnum()/ge;
