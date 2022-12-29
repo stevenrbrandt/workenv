@@ -651,8 +651,14 @@ while(<$fdr>) {
         }
         print $fdw "}}\\par}\n";
     } elsif(/<(note|problem)="([^"]*)">/) {
-        print $fdw "{\\rtlch \\ltrch\\loch {\\*\\atnid }\\chatn{\\*\\annotation{\\*\\atnref 0}$1}}\n"
-            if($notes_on);
+        my $note=$2;
+        if($notes_on) {
+            print "NOTE: $note\n";
+            #print $fdw "{\\rtlch \\ltrch\\loch {\\*\\atnid }\\chatn{\\*\\annotation{\\*\\atnref 0}$note}}\n";
+            print $fdw "{\\pard \\par}\n";
+            print $fdw "{\\pard \\cf2 NOTE: $note \\par}\n";
+            print $fdw "{\\pard \\par}\n";
+        }
     } elsif(/<scene.*>/) {
         endpar();
         if($center_scene_brk) {
