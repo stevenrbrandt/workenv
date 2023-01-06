@@ -185,6 +185,7 @@ spack add mpich
 # spack add mpitrampoline
 # spack add petsc +cuda +fftw +hwloc +openmp
 # spack add reprimand
+# Note: HDF5 problems exist with silo @4.11.
 spack add silo @4.10.2 ~fortran ~pic ~shared
 spack add simulationio +asdf ~python +rnpl +silo
 spack add ssht
