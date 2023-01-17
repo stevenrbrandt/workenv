@@ -46,6 +46,7 @@ alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 alias today='date +%m-%d-%Y'
+alias pip3=`python3 -m pip`
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
 then
   HOST=$(hostname)
@@ -85,6 +86,11 @@ export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
 export HISTSIZE=100000
 alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 alias git-clear-passwd='git config --global credential.helper store'
+if [ "$LOGGED_IN" != "yes" ]
+then
+    telegram-send "$HOST-$(today)"
+    LOGGED_IN=yes
+fi
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
