@@ -31,6 +31,28 @@ if len(sys.argv) > 1:
 else:
     args = ""
 
+vimrc = os.path.join(here, ".vimrc")
+if not os.path.exists(vimrc):
+    try:
+        with open(vimrc,"w") as fd:
+            print("set ai nu ic sw=2 ts=2 expandtab",file=fd)
+    except:
+        print_exc()
+
+bashrc = os.path.join(here, ".bashrc")
+if not os.path.exists(bashrc):
+    try:
+        with open(bashrc,"w") as fd:
+            print("""
+if [ "" != "${SPACK_ROOT}" ]
+then
+    source "$SPACK_ROOT/share/spack/setup-env.sh"
+fi
+alias vi=vim
+""".strip(),file=fd)
+    except:
+        print_exc()
+
 cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d '{dir_name}' > /dev/null; usermod -d '{here}' $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1); su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1) {args}"]
 print(cmd)
 call(cmd)
