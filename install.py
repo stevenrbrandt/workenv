@@ -88,7 +88,7 @@ alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./
 alias git-clear-passwd='git config --global credential.helper store'
 if [ "$LOGGED_IN" != "yes" ]
 then
-    telegram-send "$HOST-$(today)"
+    telegram-send "$HOST-$(date)"
     LOGGED_IN=yes
 fi
 """.format(here=here),file=fd)
