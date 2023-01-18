@@ -46,7 +46,7 @@ alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 alias today='date +%m-%d-%Y'
-alias pip3=`python3 -m pip`
+alias pip3='python3 -m pip'
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
 then
   HOST=$(hostname)
