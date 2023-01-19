@@ -47,6 +47,19 @@ alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
+
+#function set-title() {{
+#  if [[ -z "$ORIG" ]]; then
+#    ORIG=$PS1
+#  fi
+#  TITLE="\[\e]2;$*\\a\]"
+#  PS1=${{ORIG}}${{TITLE}}
+#}}
+
+function set-title() {{
+    printf "\e]2;$*\\a"
+}}
+
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
 then
   HOST=$(hostname)
