@@ -11,6 +11,15 @@ last_was_tag = False
 lastP = False
 comments = {}
 
+def fix(s):
+    s = re.sub(r'…','...',s)
+    s = re.sub(r"’","'",s)
+    s = re.sub(r'“','"',s)
+    s = re.sub(r'”','"',s)
+    s = re.sub(r'\s*—\s*',"--",s)
+    s = re.sub(r'</i><i>',"",s)
+    return s
+
 def save(content,file_name):
     pass
     #with open(file_name,"w") as fd:
@@ -144,9 +153,12 @@ def do_elem(elem,ind='',quote=False):
         if props["center"] and not props["quote"]:
             #print("<p style='text-align: center'>",end='')
             if re.match(r"^\s*\*\s*\*\s*\*\s*$",txt) or re.match(r'^\s*#\s*',txt):
-                print("<scene>")
+                print("\n<scene>",end='')
             else:
-                print("<chapter=\"%s\">" % txt)
+                txt = re.sub(r'Chapter\s+\d+:?\s*','',txt)
+                print("\n<chapter=\"%s\">" % txt,end='')
+        elif re.match(r'^\s*#\s*',txt):
+            print("\n<scene>",end='')
         else:
             #print("<p>",end='')
             is_tag = re.search(r'>\s*$',txt) is not None
@@ -158,14 +170,14 @@ def do_elem(elem,ind='',quote=False):
                 #if last_was_tag:
                 #    print(end='[2]')
                 print()
-            print(txt.strip(),end='')
+            print(fix(txt.strip()),end='')
             last_was_tag = is_tag
             #else:
             #    print()
             #print("</p>")
         for vs in props["cid"]:
             if vs in comments:
-                print('#',comments[vs])
+                print('\n#',fix(comments[vs].strip()),end='')
         print()
         props["text"] = ''
         props["center"] = False
