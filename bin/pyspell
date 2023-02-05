@@ -11,6 +11,7 @@ import os
 import sys
 import re
 import argparse
+import xml
 
 t1 = time()
 
@@ -54,6 +55,7 @@ print("Misspellings in DB:",result.fetchone()[0])
 locals : Dict[str,int] = {}
 
 def ok(code : int)->bool:
+    assert type(code) == int
     return code >= 200 and code < 300
 
 disable_web = False
@@ -99,8 +101,8 @@ def check_web(num : int,word : str,force : bool=False)->int:
     if re.search(r'(?i)common\s+misspelling\s+of', res.content.decode()):
         ret = 406
 
-    if ok(ret):
-        print("Found:",url)
+    #if ok(ret):
+    #    print("Found:",url)
     return ret
 
 def manual(word : str, code : int)->None:
@@ -114,6 +116,7 @@ def check(word:str,force:bool=False)->bool:
         return True
     if word[0] in '\\':
         return True
+    result : Tuple[int,...]
     if (not force) and word in locals:
         result = (locals[word],)
     else:
@@ -139,6 +142,7 @@ def check(word:str,force:bool=False)->bool:
     locals[word] = result[0]
     return ok(result[0])
 
+caps : Dict[str,str] = {}
 
 try:
   # If a locals.txt file exists, we
@@ -146,14 +150,24 @@ try:
   if pres.locals:
     with open("locals.txt","r") as fd:
         for line in fd.readlines():
-            locals[re.sub(r"’","",line.strip())] = 200
+            with_case = line.strip()
+            as_lower = line.lower()
+            caps[as_lower] = with_case
+            locals[re.sub(r"’","",as_lower)] = 200
 except:
   pass
 
-miss = {}
+miss : Dict[str,int] = {}
+
+def inc_miss(w : str)->None:
+    if w not in miss:
+        miss[w] = 1
+    else:
+        miss[w] += 1
+
 for word in pres.words:
     if not check(word,force=pres.force):
-        miss[word] = 1
+        inc_miss(word)
 
 def score(w1 : str,w2 : str)->int:
     sc : Dict[str,int] = {}
@@ -240,13 +254,13 @@ def suggest(word:str,use3:bool=True)->str:
         #print("sql:",sql,fl,ll,w)
         result = cursor.execute(sql)
     if use3:
-        retval = suggest3(result,word)
+        retval = suggest3(result,word)[0][0]
     else:
         retval = suggest2(result,word)
     suggest_cache[use3][word] = retval
     return retval
 
-def do_text(text):
+def do_text(text:str)->str:
     text = re.sub(r"``([^']*)''",r'\1',text)
     text = re.sub(r"`([^']*)'",r'\1',text)
     text = re.sub(r"\w+='([^']*)'",r'\1',text)
@@ -255,8 +269,8 @@ def do_text(text):
     for w in re.finditer(r"(\\?[\w'’]+)",text):
         s += text[pos:w.start()]
         pos = w.end()
-        word = w.group(1)
-        word = word.lower()
+        with_case : str = w.group(1)
+        word = with_case.lower()
         word = re.sub(r"’","'",word)
         word = re.sub(r"'s$","",word)
         if re.match(r".*[\d_]",word):
@@ -268,11 +282,11 @@ def do_text(text):
         if check(word):
             s += w.group()
         else:
-            miss[word] = 1
+            inc_miss(word)
             n = 0
-            wl = []
-            for w in suggest(word):
-                wl += [w[0]]
+            wl : List[str] = []
+            for w2 in suggest(word):
+                wl += [w2[0]]
                 n += 1
                 if n == 3:
                     break
@@ -282,7 +296,7 @@ def do_text(text):
     s += text[pos:]
     return s
 
-def get_name(elem):
+def get_name(elem : 'xml.etree.ElementTree.Element')->str:
     if elem == None:
         return ''
     s = str(elem)
@@ -291,7 +305,7 @@ def get_name(elem):
         raise Exception(str(elem))
     return g.group(1)
 
-def do_tree(tree):
+def do_tree(tree : 'xml.etree.ElementTree.Element')->None:
     global text_file
     name = get_name(tree)
     if name == 't' and tree.text is not None:
@@ -302,7 +316,7 @@ def do_tree(tree):
     for t in tree:
         do_tree(t)
 
-def do_soup(tag):
+def do_soup(tag : 'BeautifulSoup')->None:
     if not hasattr(tag,"name"):
         return
     if tag.name in ["p","i","li","td"]:
@@ -315,26 +329,26 @@ from threading import Thread
 from queue import Queue
 
 class FWriter(Thread):
-    def __init__(self,fname):
+    def __init__(self,fname:str)->None:
         Thread.__init__(self)
         self.fd = open(fname, "w")
-        self.queue = Queue()
+        self.queue : Queue[Optional[str]] = Queue()
         self.start()
-    def run(self):
+    def run(self)->None:
         while True:
             line = self.queue.get()
             if line is None:
                 break
             self.fd.write(line)
-    def write(self, line):
+    def write(self, line:str)->None:
         self.queue.put(line)
-    def close(self):
+    def close(self)->None:
         self.queue.put(None)
 
-fw = FWriter("out.txt")
-fw.write("Hello")
-fw.write("World")
-fw.close()
+#fw = FWriter("out.txt")
+#fw.write("Hello")
+#fw.write("World")
+#fw.close()
 global text_file
 
 for a in pres.files:
@@ -369,7 +383,7 @@ for a in pres.files:
         import xml.etree.ElementTree as ET
         document = zipfile.ZipFile(a)
         xml_content = document.read('word/document.xml')
-        tree = ET.fromstring(xml_content)
+        tree : 'xml.etree.ElementTree.Element' = ET.fromstring(xml_content)
         text_file = ''
         do_tree(tree)
         do_text(text_file)
@@ -406,7 +420,7 @@ else:
         pass
         with open("misspellings.txt","w") as fd:
             for word in words:
-                print(word,suggest(word,use3=False),file=fd)
+                print(word,suggest(word,use3=False),f"times={miss[word]}",file=fd)
 
 for word in pres.delete:
     rword = word.replace("'","''")
