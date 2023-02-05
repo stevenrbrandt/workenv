@@ -16,8 +16,11 @@ def fix(s):
     s = re.sub(r"’","'",s)
     s = re.sub(r'“','"',s)
     s = re.sub(r'”','"',s)
+    s = re.sub(r'\s*–\s*','--',s)
     s = re.sub(r'\s*—\s*',"--",s)
     s = re.sub(r'</i><i>',"",s)
+    s = re.sub(r'\s+$','',s)
+    s = re.sub(r'^\s+','',s)
     return s
 
 def save(content,file_name):
