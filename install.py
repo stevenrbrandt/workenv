@@ -48,17 +48,17 @@ alias show-cursor='echo -en "\e[?25h"'
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
 
-#function set-title() {{
-#  if [[ -z "$ORIG" ]]; then
-#    ORIG=$PS1
-#  fi
-#  TITLE="\[\e]2;$*\\a\]"
-#  PS1=${{ORIG}}${{TITLE}}
-#}}
-
 function set-title() {{
-    printf "\e]2;$*\\a"
+  if [[ -z "$ORIG" ]]; then
+    ORIG=$PS1
+  fi
+  TITLE="\[\e]2;$*\\a\]"
+  PS1=${{ORIG}}${{TITLE}}
 }}
+
+#function set-title() {{
+#    printf "\e]2;$*\\a"
+#}}
 
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
 then
@@ -99,6 +99,14 @@ export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
 export HISTSIZE=100000
 alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 alias git-clear-passwd='git config --global credential.helper store'
+if [ "$SPACK_ROOT" != "" ]
+then
+   if [ "$LOADED_SPACK" != "$SPACK_ROOT" ]
+   then
+      export LOADED_SPACK="$SPACK_ROOT"
+      source "$SPACK_ROOT/share/spack/setup-env.sh"
+   fi
+fi
 if [ "$LOGGED_IN" != "yes" ]
 then
     telegram-send "$HOST-$(date)"
