@@ -107,7 +107,7 @@ then
       source "$SPACK_ROOT/share/spack/setup-env.sh"
    fi
 fi
-if [ "$LOGGED_IN" != "yes" ]
+if [ "$LOGGED_IN" != "yes" -a -r ~/.watch-login ]
 then
     telegram-send "$HOST-$(date)"
     LOGGED_IN=yes
