@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from typing import Set, Optional, Iterable, Callable, Final
 from termcolor import colored as is_colored
 import tarfile
