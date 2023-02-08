@@ -101,5 +101,7 @@ def untar(file_tgz : str)->None:
 
     print(colored("Successfully unpacked file:","green"),file_tgz)
 
-untar("/usr/etuser/Cactus.tar.gz")
+if __name__ == "__main__":
+    untar(sys.argv[1])
+#untar("/usr/etuser/Cactus.tar.gz")
 #untar("t.tgz")
