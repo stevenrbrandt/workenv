@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from typing import Optional, cast, Dict, List, Union, Tuple
+from typing import Optional, cast, Dict, List, Union, Tuple, Final, Set
 from requests.exceptions import ConnectionError
 from time import sleep, time
 from random import shuffle
@@ -13,7 +13,7 @@ import re
 import argparse
 import xml
 
-t1 = time()
+t1 : Final = time()
 
 class fake_res:
     def __init__(self)->None:
@@ -45,6 +45,8 @@ pres=parser.parse_args(sys.argv[1:])
 tmout = pres.tmout
 words_db = os.path.join(os.environ["HOME"],"LSUOneDrive",".pyspell.sqlite3")
 
+word_counts : Dict[str,Dict[str,int]]= {}
+
 conn = sqlite3.connect(words_db)
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS words (word text primary key, code integer)")
@@ -53,12 +55,13 @@ print("Total words in DB:",result.fetchone()[0])
 result = cursor.execute("SELECT count(*) FROM words WHERE code < 200 or code >= 300")
 print("Misspellings in DB:",result.fetchone()[0])
 locals : Dict[str,int] = {}
+misspellings : Dict[str,int] = {}
 
 def ok(code : int)->bool:
     assert type(code) == int
     return code >= 200 and code < 300
 
-disable_web = False
+disable_web = True
 
 def check_web(num : int,word : str,force : bool=False)->int:
     if disable_web:
@@ -112,6 +115,7 @@ def manual(word : str, code : int)->None:
     
 def check(word:str,force:bool=False)->bool:
     global disable_web
+
     if word == "":
         return True
     if word[0] in '\\':
@@ -120,13 +124,15 @@ def check(word:str,force:bool=False)->bool:
     if (not force) and word in locals:
         result = (locals[word],)
     else:
+        # Escape for safety in sqlite3
         rword = word.replace("'","''")
         cursor.execute("SELECT code FROM words WHERE word = '%s'" % rword)
         result = cursor.fetchone()
-        if(force or result == None):
+        if force or result == None:
             order = [1,2,3,4]
             shuffle(order)
-            print("Try web:",word)
+            if not disable_web:
+                print("Try web:",word)
             for site in order:
                 try:
                     status_code = check_web(site, word, force)
@@ -139,7 +145,7 @@ def check(word:str,force:bool=False)->bool:
                 cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
                 conn.commit()
             result = (status_code,)
-    locals[word] = result[0]
+        locals[word] = result[0]
     return ok(result[0])
 
 caps : Dict[str,str] = {}
@@ -261,23 +267,42 @@ def suggest(word:str,use3:bool=True)->str:
     return retval
 
 def do_text(text:str)->str:
+    # Remove enclosing double quotes
     text = re.sub(r"``([^']*)''",r'\1',text)
+    # Remove enclosing single quotes
     text = re.sub(r"`([^']*)'",r'\1',text)
+    # Remove enclosing single quotes
     text = re.sub(r"\w+='([^']*)'",r'\1',text)
+
     pos = 0
     s = ""
     for w in re.finditer(r"(\\?[\w'’]+)",text):
         s += text[pos:w.start()]
         pos = w.end()
-        with_case : str = w.group(1)
-        word = with_case.lower()
+
+        word : str = w.group(1)
+        # Normalize apostrophe
         word = re.sub(r"’","'",word)
+        # Remove trailing 's
         word = re.sub(r"'s$","",word)
+        # Skip over words with numbers and underscores
         if re.match(r".*[\d_]",word):
             s += w.group()
             continue
+        # Remove trailing '
         word = re.sub(r"'$","",word)
+        # Remove leading '
         word = re.sub(r"^'","",word)
+
+        # Check on word counts
+        word_found = word
+        word = word.lower()
+        if word not in word_counts:
+            word_counts[word] = {word_found:1}
+        elif word_found not in word_counts[word]:
+            word_counts[word][word_found] = 1
+        else:
+            word_counts[word][word_found] += 1
 
         if check(word):
             s += w.group()
@@ -356,8 +381,8 @@ for a in pres.files:
 
     if re.match(r'.*\.(txt|md)$',a):
         #with open("."+a+".schk","w") as fw:
+        fw = FWriter("."+a+".schk")
         try:
-            fw = FWriter("."+a+".schk")
             with open(a,"r") as fd:
                 for line in fd.readlines():
                     out = do_text(line)
@@ -443,3 +468,13 @@ if pres.ascii_db:
 
 t2 = time()
 print("Time:",t2-t1)
+for word in word_counts:
+    n = 0
+    ww : Set[str] = {}
+    for w in word_counts[word]:
+        n += word_counts[word][w]
+        ww.add(w)
+    if len(ww)==1 and w != w.lower():
+        print("Proper Noun?:",word)
+    if n == 1:
+        print("Unique word:",word)
