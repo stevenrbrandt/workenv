@@ -40,6 +40,8 @@ parser.add_argument('--locals', action='store_true', default=False, help='whethe
 parser.add_argument('--force', action='store_true', default=False, help='whether to force a web check')
 parser.add_argument('--tmout', type=int, default=5, help='timeout to use for websites')
 parser.add_argument('--ascii-db', action='store_true', default=False, help='Write out the database to words.txt')
+parser.add_argument('--vdiff', action='store_true', default=False, help='Generate a vdiff file with suggested substitituions.')
+parser.add_argument('--enable-web', action='store_true', default=False, help='Check on the web')
 pres=parser.parse_args(sys.argv[1:])
 
 tmout = pres.tmout
@@ -61,7 +63,7 @@ def ok(code : int)->bool:
     assert type(code) == int
     return code >= 200 and code < 300
 
-disable_web = True
+disable_web = not pres.enable_web #True
 
 def check_web(num : int,word : str,force : bool=False)->int:
     if disable_web:
@@ -121,7 +123,7 @@ def check(word:str,force:bool=False)->bool:
     if word[0] in '\\':
         return True
     result : Tuple[int,...]
-    if (not force) and word in locals:
+    if word in locals:
         result = (locals[word],)
     else:
         # Escape for safety in sqlite3
@@ -157,7 +159,7 @@ try:
     with open("locals.txt","r") as fd:
         for line in fd.readlines():
             with_case = line.strip()
-            as_lower = line.lower()
+            as_lower = with_case.lower()
             caps[as_lower] = with_case
             locals[re.sub(r"’","",as_lower)] = 200
 except:
@@ -172,7 +174,7 @@ def inc_miss(w : str)->None:
         miss[w] += 1
 
 for word in pres.words:
-    if not check(word,force=pres.force):
+    if not check(word,force=pres.enable_web):
         inc_miss(word)
 
 def score(w1 : str,w2 : str)->int:
@@ -227,14 +229,11 @@ def f2(a : Tuple[str,int])->int:
     assert type(a) == tuple, a
     return a[1]
 
-def suggest4(word:str)->List[Tuple[str,int]]:
+def suggest3(word:str)->List[Tuple[str,int]]:
     fl = word[0]
     ll = word[-1]
     sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
     result = cursor.execute(sql)
-    return suggest3(result,word)
-    
-def suggest3(result:'sqlite3.Cursor',word:str)->List[Tuple[str,int]]:
     scores : List[Tuple[str,int]] = []
     while True:
         record = result.fetchone()
@@ -260,14 +259,14 @@ def suggest(word:str,use3:bool=True)->str:
         return "?"
     fl = w[0]
     ll = w[-1]
+    #if use3:
+    #    result = cursor.execute("SELECT word FROM words WHERE code >= 200 and code < 300")
+    #else:
+    #    sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
+    #print("sql:",sql,fl,ll,w)
+    #    result = cursor.execute(sql)
     if use3:
-        result = cursor.execute("SELECT word FROM words WHERE code >= 200 and code < 300")
-    else:
-        sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
-        #print("sql:",sql,fl,ll,w)
-        result = cursor.execute(sql)
-    if use3:
-        retval = suggest3(result,word)[0][0]
+        retval = suggest3(word)[0][0]
     else:
         retval = suggest2(result,word)
     suggest_cache[use3][word] = retval
@@ -284,7 +283,8 @@ def do_text(text:str)->str:
     pos = 0
     s = ""
     for w in re.finditer(r"(\\?[\w'’]+)",text):
-        s += text[pos:w.start()]
+        if pres.vdiff:
+            s += text[pos:w.start()]
         pos = w.end()
 
         word : str = w.group(1)
@@ -294,7 +294,8 @@ def do_text(text:str)->str:
         word = re.sub(r"'s$","",word)
         # Skip over words with numbers and underscores
         if re.match(r".*[\d_]",word):
-            s += w.group()
+            if pres.vdiff:
+                s += w.group()
             continue
         # Remove trailing '
         word = re.sub(r"'$","",word)
@@ -312,20 +313,25 @@ def do_text(text:str)->str:
             word_counts[word][word_found] += 1
 
         if check(word):
-            s += w.group()
+            if pres.vdiff:
+                s += w.group()
         else:
             inc_miss(word)
             n = 0
             wl : List[str] = []
-            for w2 in suggest4(word):
+            for w2 in suggest3(word):
                 wl += [w2[0]]
                 n += 1
                 if n == 3:
                     break
-            s += str(wl)
+            if pres.vdiff:
+                s += str(wl)
     if pos == 0:
         return text
-    s += text[pos:]
+    if pres.vdiff:
+        s += text[pos:]
+    if not pres.vdiff:
+        assert s == ""
     return s
 
 def get_name(elem : 'xml.etree.ElementTree.Element')->str:
@@ -359,9 +365,29 @@ def do_soup(tag : 'BeautifulSoup')->None:
 
 from threading import Thread
 from queue import Queue
+from abc import ABCMeta, abstractmethod
 
-class FWriter(Thread):
+class FWriter(metaclass=ABCMeta):
     def __init__(self,fname:str)->None:
+        self.fname = fname
+    @abstractmethod
+    def write(self, line:str)->None:
+        ...
+    @abstractmethod
+    def close(self)->None:
+        ...
+
+class EmptyFWriter(FWriter):
+    def __init__(self)->None:
+        pass
+    def write(self,line:str)->None:
+        pass
+    def close(self)->None:
+        pass
+
+class ThreadedFWriter(FWriter,Thread):
+    def __init__(self,fname:str)->None:
+        FWriter.__init__(self,fname)
         Thread.__init__(self)
         self.fd = open(fname, "w")
         self.queue : Queue[Optional[str]] = Queue()
@@ -387,8 +413,11 @@ for a in pres.files:
     print("FILE:",a)
 
     if re.match(r'.*\.(txt|md)$',a):
-        #with open("."+a+".schk","w") as fw:
-        fw = FWriter("."+a+".schk")
+        fw : FWriter
+        if pres.vdiff:
+            fw = ThreadedFWriter("."+a+".vdiff")
+        else:
+            fw = EmptyFWriter()
         try:
             with open(a,"r") as fd:
                 for line in fd.readlines():
@@ -428,7 +457,7 @@ for a in pres.files:
 
 for a in pres.suggest:
     print(a)
-    for b in suggest4(a):
+    for b in suggest3(a):
         if b[1] == 0:
             print("'%s' is correct" % a)
             t2 = time()
