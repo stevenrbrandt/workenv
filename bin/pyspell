@@ -227,6 +227,13 @@ def f2(a : Tuple[str,int])->int:
     assert type(a) == tuple, a
     return a[1]
 
+def suggest4(word:str)->List[Tuple[str,int]]:
+    fl = word[0]
+    ll = word[-1]
+    sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
+    result = cursor.execute(sql)
+    return suggest3(result,word)
+    
 def suggest3(result:'sqlite3.Cursor',word:str)->List[Tuple[str,int]]:
     scores : List[Tuple[str,int]] = []
     while True:
@@ -310,7 +317,7 @@ def do_text(text:str)->str:
             inc_miss(word)
             n = 0
             wl : List[str] = []
-            for w2 in suggest(word):
+            for w2 in suggest4(word):
                 wl += [w2[0]]
                 n += 1
                 if n == 3:
@@ -421,7 +428,7 @@ for a in pres.files:
 
 for a in pres.suggest:
     print(a)
-    for b in suggest(a):
+    for b in suggest4(a):
         if b[1] == 0:
             print("'%s' is correct" % a)
             t2 = time()
@@ -468,13 +475,13 @@ if pres.ascii_db:
 
 t2 = time()
 print("Time:",t2-t1)
-for word in word_counts:
-    n = 0
-    ww : Set[str] = {}
-    for w in word_counts[word]:
-        n += word_counts[word][w]
-        ww.add(w)
-    if len(ww)==1 and w != w.lower():
-        print("Proper Noun?:",word)
-    if n == 1:
-        print("Unique word:",word)
+#for word in word_counts:
+#    n = 0
+#    ww : Set[str] = set()
+#    for w in word_counts[word]:
+#        n += word_counts[word][w]
+#        ww.add(w)
+#    if len(ww)==1 and w != w.lower():
+#        print("Proper Noun?:",word)
+#    if n == 1:
+#        print("Unique word:",word)
