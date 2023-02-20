@@ -104,6 +104,7 @@ then
    if [ "$LOADED_SPACK" != "$SPACK_ROOT" ]
    then
       export LOADED_SPACK="$SPACK_ROOT"
+      export SPACK_SKIP_MODULES=1
       source "$SPACK_ROOT/share/spack/setup-env.sh"
    fi
 fi
