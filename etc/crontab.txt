@@ -19,6 +19,8 @@
 # 0 5 * * 1 tar -zcf /var/backups/home.tgz /home/
 # 
 # For more information see the manual pages of crontab(5) and cron(8)
+# Alternatively run:
+#   hwclock -s
 # 
 # m h  dom mon dow   command
   1,10,20,30,40,50 *  *   *   *     /usr/sbin/ntpdate -s time.nist.gov > /var/log/ntpdate.log 2>&1
