@@ -1,1 +1,2 @@
+export DISPLAY=:0
 xclip -selection clipboard -o > $1

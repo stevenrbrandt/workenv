@@ -331,8 +331,16 @@ my $header = "";
 my $fdr = new FileHandle();
 my $fdw = new FileHandle();
 my $toc = new FileHandle();
-my $infile = $ARGV[0];
+my $chap0 = 0;
 my $chapter = 1;
+my $infile;
+if($ARGV[0] =~ /^\d+$/) {
+    $chap0 = 1*$ARGV[0];
+    $infile = $ARGV[1];
+    $chapter += $chap0;
+} else {
+    $infile = $ARGV[0];
+}
 my $titlepg = 0;
 die "Not a text file" unless($infile =~ /\.txt$/);
 
@@ -342,7 +350,7 @@ my $ti = "";
 my $chwc = "";
 my $notes = "";
 my @titles = ();
-my $tchno = 0;
+my $tchno = $chap0;
 while(<$fdr>) {
     s/^\s*#.*//;
     if(/<chapter(="([^"]*)")?(\s+sect|)>/) {
@@ -400,7 +408,7 @@ if($ti ne "") {
 }
 close($toc);
 close($fdr);
-$chapter = 1;
+$chapter = 1+$chap0;
 
 # Begin
 my ($mll,$mlr,$mlt,$mlb)=(
