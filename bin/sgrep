@@ -32,7 +32,7 @@ while($ARGV[0] =~ /^-/) {
         $dirs{$1}++;
     } elsif($a eq "-s") {
         $symlink++;
-    } elsif($a eq "-l") { # same grep
+    } elsif($a eq "-l") { # same as grep
         $lc++;
     } elsif($a eq "-h" or $a eq "-help" or $a eq "--help" or $a eq "-?") {
         die "usage: sgrep [-h] [-i] [-l] suffix,... pattern [files]"
@@ -47,24 +47,34 @@ my $needle = shift @ARGV;
 if($#ARGV < 0) {
     push @ARGV, ".";
 }
-
+my @dlist = ();
 for my $a (@ARGV) {
     $a =~ s{/+$}{};
     do_search($suffix,$needle,$a);
 }
-print join("\n",keys %files),"\n";
+my $loops = 0;
+while(1) {
+    $loops++;
+    my @search_list = @dlist;
+    @dlist = ();
+    for my $f (@search_list) {
+        do_search($suffix,$needle,$f);
+    }
+    last if($#dlist < 0);
+}
+#print join("\n",keys %files),"\n";
 
 sub do_search {
     my $suffix = shift;
     my $needle = shift;
     my $file = shift;
+    #print("do_search($suffix,$needle,$file)\n") if($file =~/job/);
     return if(!$hidden and $file =~ /\/\.[^\/]+$/);
     print "file=$file\n" if($verbose);
     if(!$symlink and -l $file) {
         return;
     } elsif(-d $file) {
         my $dd = new FileHandle;
-        my @dlist = ();
         opendir($dd,$file) or warn "could not read dir $file";
         while(my $entry = readdir($dd)) {
             # directories to avoid recursing into
@@ -74,9 +84,9 @@ sub do_search {
             $dlist[$#dlist+1]=$f;
         }
         closedir($dd);
-        for my $f (@dlist) {
-            do_search($suffix,$needle,$f);
-        }
+        #for my $f (@dlist) {
+        #    do_search($suffix,$needle,$f);
+        #}
     #} elsif(-r $file and $file !~ /\.(odt|ppt|pptx|doc|docx|jpg|png|gif|jpeg|o|class|jar|a|so)$/i and (($suffix eq "any" ) or $file =~ /\.($suffix)$/) and -T $file) {
 #    } elsif(-r $file and $file =~ /\.pdf$/i) {
 #        system("pdftotext - $ENV{HOME}/pdf.tmp < '$file' 2>$ENV{HOME}/pdf.err");
@@ -93,6 +103,7 @@ sub do_search {
             #print ("pdftotext - $ENV{HOME}/pdf.tmp < '$file' 2>$ENV{HOME}/pdf.err\n");
             #$file = "$ENV{HOME}/pdf.tmp";
         }
+        #print("open($file,needle=$needle)\n") if($file =~ /job/);
         open($fd,$file) or die "could not open $file";
         my $line=1;
         if($ic) { # ignore case
@@ -100,7 +111,12 @@ sub do_search {
                 if(/$needle/i) {
                     print "$file:$line: $_" unless($lc);
                     print "$file:$line: pat=$&\n" if($color);
-                    $files{$file}++ if($lc);
+                    if($lc) {
+                        if(!defined($files{$file})) {
+                            $files{$file}++;
+                            print($file,"\n");
+                        }
+                    }
                 }
                 $line++;
             }
@@ -109,12 +125,18 @@ sub do_search {
                 if(/$needle/) {
                     print "$file:$line: $_" unless($lc);
                     print "$file:$line: pat=$&\n" if($color);
-                    $files{$file}++ if($lc);
+                    if($lc) {
+                        if(!defined($files{$file})) {
+                            $files{$file}++;
+                            print($file,"\n");
+                        }
+                    }
                 }
                 $line++;
             }
         }
         close($fd);
+        #print("close($file,needle=$needle)\n") if($file =~ /job/);
     } elsif(!-e $file) {
         die "File does not exist: $file";
     }
