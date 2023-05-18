@@ -13,11 +13,11 @@ if [ ! -d Cactus ]
 then
   ./GetComponents --parallel --shallow einsteintoolkit.th
 fi
-if [ ! -r Cactus/repos/simfactory2/etc/defs.local.ini ]
-then
-  (cd Cactus && ./simfactory/bin/sim setup-silent)
-  echo "[$(./simfactory/bin/sim whoami|cut -d: -f2|sed 's/\s//')]" >> Cactus/simfactory/etc/defs.local.ini
-  echo "sourcebasedir=$(dirname $(pwd))" >> Cactus/simfactory/etc/defs.local.ini
-fi
 cd Cactus
+if [ ! -r repos/simfactory2/etc/defs.local.ini ]
+then
+  ./simfactory/bin/sim setup-silent
+  echo "[$(./simfactory/bin/sim whoami|cut -d: -f2|sed 's/\s//')]" >> simfactory/etc/defs.local.ini
+  echo "sourcebasedir=$(dirname $(pwd))" >> simfactory/etc/defs.local.ini
+fi
 trun ./simfactory/bin/sim build sim-cpu -j10 --thornlist $HERE/einsteintoolkit.th |& tee $HERE/make.out
