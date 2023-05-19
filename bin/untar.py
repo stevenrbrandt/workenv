@@ -139,7 +139,7 @@ def untar(file_tgz : str, require_common_dir:Union[str,bool]=False)->None:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(prog='pyspell', description='Python-Based Spell Checker')
+    parser = argparse.ArgumentParser(prog='untar', description='Python-Based Untarring Command')
     parser.add_argument('filename', type=str, help='file to untar')
     parser.add_argument('--output-dir', type=str, nargs=1, help='Put files in output dir')
     parser.add_argument('--one-dir', action='store_true', default=False, help='Only untar if all files are in a common dir')
