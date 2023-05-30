@@ -126,6 +126,8 @@ def untar(file_tgz : str, require_common_dir:Union[str,bool]=False)->None:
                     continue
 
             # Write the file
+            if os.path.exists(m_name):
+                os.unlink(m_name)
             with open(m_name, "wb") as fd:
                 fd.write(content)
             os.chmod(m_name, m.mode)
