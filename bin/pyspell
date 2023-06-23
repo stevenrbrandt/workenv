@@ -12,6 +12,7 @@ import sys
 import re
 import argparse
 import xml
+from colored import colored
 
 t1 : Final = time()
 
@@ -81,14 +82,11 @@ def check_web(num : int,word : str,force : bool=False)->int:
         wword = word.replace("'","-")
         url = "https://www.yourdictionary.com/%s" % wword
         res = requests.get(url, timeout=tmout)
-        ret = res.status_code
     elif num == 3:
         pword = word.replace("'","%27")
         url = "https://www.thefreedictionary.com/%s" % pword
         try:
             res = requests.get(url, timeout=tmout)
-            if 'is not available in the general English dictionary' in res.content.decode():
-                ret = 406
         except:
             ret = 404
 
@@ -98,16 +96,25 @@ def check_web(num : int,word : str,force : bool=False)->int:
         nword = word.replace("'","")
         url = "https://www.collinsdictionary.com/us/dictionary/english/%s" % nword
         res = requests.get(url, timeout=tmout)
-        if "Sorry, no results for":
-            ret = 404
-        else:
-            ret = 200
+        ret = 200
 
-    if re.search(r'(?i)common\s+misspelling\s+of', res.content.decode()):
+    ret = res.status_code
+    if ok(ret):
+        content = res.content.decode()
+    else:
+        content = ""
+
+    if "Sorry, no results for" in content:
+        return 406
+    elif re.search(r'(?i)common\s+misspelling\s+of', content):
+        ret = 406
+    elif 'is not available in the general English dictionary' in res.content.decode():
         ret = 406
 
-    #if ok(ret):
-    #    print("Found:",url)
+    if ok(ret):
+        print("  ",colored("Found:","green"),url,"->",ret)
+    else:
+        print("  ",colored("Not found:","red"),url,"->",ret)
     return ret
 
 def manual(word : str, code : int)->None:
