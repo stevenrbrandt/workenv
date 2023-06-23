@@ -419,7 +419,7 @@ global text_file
 for a in pres.files:
     print("FILE:",a)
 
-    if re.match(r'.*\.(txt|md)$',a):
+    if re.match(r'.*\.(txt|md|tex)$',a):
         fw : FWriter
         if pres.vdiff:
             fw = ThreadedFWriter("."+a+".vdiff")
@@ -510,6 +510,7 @@ if pres.ascii_db:
             print(word[0],file=fd)
 
 t2 = time()
+
 print("Time:",t2-t1)
 #for word in word_counts:
 #    n = 0

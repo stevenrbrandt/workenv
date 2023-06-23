@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-from typing import Set, Optional, Iterable, Callable, Final
+from typing import Set, Optional, Iterable, Callable, Final, Union, Dict
 from termcolor import colored as is_colored
 import tarfile
 import sys
 import os
+import re
 
 def not_colored(s:str, _1:Optional[str])->str:
     return s
@@ -24,10 +25,39 @@ def mk_dir(dname:str)->None:
     os.makedirs(dname,exist_ok=True)
     dirs.add(dname)
 
-def untar(file_tgz : str)->None:
+def untar(file_tgz : str, require_common_dir:Union[str,bool]=False)->None:
     tar = tarfile.open(file_tgz, "r:gz")
     print(colored("Untar starting... Please wait...","green"))
     members = tar.getmembers()
+
+    # Determine the number of directories
+    dirs : Dict[str,int] = {}
+    for m in members:
+        g = re.match(r'^(.*)/', m.name)
+        if g:
+            dirname = g.group(1)
+        else:
+            dirname = m.name
+        dirs[dirname] = dirs.get(dirname,0)+1
+
+    new_name : str
+    if type(require_common_dir) == bool and require_common_dir == True:
+        if len(dirs) != 1:
+            raise Exception("No common dir in tarball: "+str(list(dirs.keys())))
+        rename = False
+        add_name = False
+    elif type(require_common_dir) == str:
+        new_name = require_common_dir
+        if len(dirs) == 1:
+            rename = True
+            add_name = False
+        else:
+            rename = False
+            add_name = True
+    else:
+        add_name = False
+        rename = False
+
     total_files : Final = len(members)
     print("Total files to unpack:",total_files)
     steps : Final = 40
@@ -38,24 +68,29 @@ def untar(file_tgz : str)->None:
         n += 1
         p = int(n*progress_factor)
         percent = int(100*n/total_files)
+        m_name : str = m.name
+        if add_name:
+            m_name = new_name + "/" + m.name
+        elif rename:
+            m_name = re.sub(r'^[^/]*', new_name, m.name)
         if p != progress:
-            print(colored("Progress %4d%%:" % percent,"cyan"),m.name)
+            print(colored("Progress %4d%%:" % percent,"cyan"),m_name)
             progress = p
-        dname = os.path.dirname(m.name)
+        dname = os.path.dirname(m_name)
         mk_dir(dname)
 
         # If this is a symbolic link, create or recreate it
         if m.linkpath != "":
             try:
-                os.unlink(m.name)
+                os.unlink(m_name)
             except:
                 pass
-            os.symlink(m.linkpath, m.name)
+            os.symlink(m.linkpath, m_name)
             continue
 
         # Load the status object
         try:
-            st = os.stat(m.name)
+            st = os.stat(m_name)
         except FileNotFoundError as fnf:
             st = None
 
@@ -66,7 +101,7 @@ def untar(file_tgz : str)->None:
             try:
                 f = tar.extractfile(m)
             except:
-                print(colored("Skipping:","red"),m.name)
+                print(colored("Skipping:","red"),m_name)
                 continue
 
             if f is None:
@@ -82,27 +117,40 @@ def untar(file_tgz : str)->None:
             if st is not None:
                 # Update mode if needed
                 if m.mode != st.st_mode:
-                    os.chmod(m.name, m.mode)
+                    os.chmod(m_name, m.mode)
                 # Update mtime if needed
                 if m.mtime != st.st_mtime:
-                    os.utime(m.name, (m.mtime, m.mtime))
+                    os.utime(m_name, (m.mtime, m.mtime))
                 # If size matches, do nothing
                 if m_size == st.st_size:
                     continue
 
             # Write the file
-            with open(m.name, "wb") as fd:
+            if os.path.exists(m_name):
+                os.unlink(m_name)
+            with open(m_name, "wb") as fd:
                 fd.write(content)
-            os.chmod(m.name, m.mode)
-            os.utime(m.name, (m.mtime, m.mtime))
+            os.chmod(m_name, m.mode)
+            os.utime(m_name, (m.mtime, m.mtime))
 
             # Check that the write worked
-            st = os.stat(m.name)
-            assert st.st_size == m_size, f"Failed writing file {m.name}. Size should be {m_size}, was {st.st_size}"
+            st = os.stat(m_name)
+            assert st.st_size == m_size, f"Failed writing file {m_name}. Size should be {m_size}, was {st.st_size}"
 
     print(colored("Successfully unpacked file:","green"),file_tgz)
 
 if __name__ == "__main__":
-    untar(sys.argv[1])
+    import argparse
+    parser = argparse.ArgumentParser(prog='untar', description='Python-Based Untarring Command')
+    parser.add_argument('filename', type=str, help='file to untar')
+    parser.add_argument('--output-dir', type=str, nargs=1, help='Put files in output dir')
+    parser.add_argument('--one-dir', action='store_true', default=False, help='Only untar if all files are in a common dir')
+    pres=parser.parse_args(sys.argv[1:])
+    if pres.output_dir:
+        untar(pres.filename, require_common_dir=pres.output_dir[0])
+    elif pres.one_dir:
+        untar(pres.filename, require_common_dir=True)
+    else:
+        untar(pres.filename)
 #untar("/usr/etuser/Cactus.tar.gz")
 #untar("t.tgz")
