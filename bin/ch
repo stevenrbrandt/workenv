@@ -3,6 +3,7 @@ use Cwd;
 
 my %bookmarks = (
     #"zoom" => ["https://lsu.zoom.us/j/631356683"],
+    "kdp"=>["https://www.amazon.com/kindle-vella/widget/story/B0981R33MB/author/comments"],
     "gitter"=>["https://gitter.im/EinsteinToolkit/EinsteinToolkit"],
     "carpetx"=>["https://bitbucket.org/eschnett/cactusamrex/wiki/To%20Do%20List"],
     "printer"=>["https://10.20.106.20/stat/welcome.php?tab=status"],
@@ -20,7 +21,7 @@ my %bookmarks = (
     "moodle" => ["https://moodle3.lsu.edu"],
     "kdp" => ["https://kdp.amazon.com/en_US/bookshelf"],
     "leave" => ["https://tiger02.apps.lsu.edu/certification_application/leave_certification/"],
-    "td" => ["http://www.tdameritrade.com"],
+    "td" => ["https://client.schwab.com/Login/SignOn/CustomerCenterLogin.aspx"],
     "beo" => ["http://localhost/cios/index.php/python/index.xml"],
     "heorot" => ["http://localhost/cios/index.php/python/heorot.xml"],
     "target" => ["https://rcam.target.com/"],

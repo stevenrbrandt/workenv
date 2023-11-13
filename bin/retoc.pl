@@ -7,6 +7,10 @@ my $off = 0;
 if($#ARGV >= 0) {
     $off=1*$ARGV[0];
 }
+my $sub = 0;
+if($#ARGV >= 1) {
+    $sub=1*$ARGV[1];
+}
 open($fd,"toc.txt");
 while(<$fd>) {
   chomp;
@@ -31,4 +35,9 @@ while(my $line=<$fd>) {
   printf("%s %6.0f %10.0f\n",$line,100.0*$sum2/$sum,$sum2);
 }
 close($fd);
-print "\nSUM=$sum\n";
+if($sub > 0) {
+    my $diff = $sum - $sub;
+    print "\nSUM = $sum = SUM - $sub = $diff\n";
+} else {
+    print "\nSUM = $sum\n";
+}
