@@ -832,10 +832,10 @@ if ($d[4] == 10) {
         my $mwcn = int($wday*$d[3]);
         $wday = int($wday);
         my $dwcn = $mwcn - $wcn;
-        print "Nano: Word Count=$wcn + $dwcn = $mwcn, w/day=$wday for $count days\n";
+        #print "Nano: Word Count=$wcn + $dwcn = $mwcn, w/day=$wday for $count days\n";
     }
     my $rem = $goal - $wcn;
-    print("Nano: Remaining: $rem\n");
+    #print("Nano: Remaining: $rem\n");
 }
 print "Chapters on: $chapters_on\n";
 print "Notes on: $notes_on\n";
