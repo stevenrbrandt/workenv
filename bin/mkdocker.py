@@ -6,6 +6,9 @@ if len(sys.argv) != 2:
     exit(2)
 
 name = sys.argv[1]
+
+dfname = "Dockerfile"
+
 template =  f"""
 version: '3'
 
@@ -17,7 +20,7 @@ services:
   {name}-service:
     build:
         context: .
-        dockerfile: Dockerfile
+        dockerfile: {dfname}
     image: stevenrbrandt/{name}
     hostname: {name}-host
     container_name: {name}
@@ -30,7 +33,18 @@ services:
 dc = "docker-compose.yml"
 if os.path.exists(dc):
     print(f"{dc} already exists")
-    exit(1)
 else:
+    print(f"Creating {dc}")
     with open(dc, "w") as fd:
         fd.write(template.lstrip())
+
+dockerfile = """
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND noninteractive
+"""
+if os.path.exists(dfname):
+    print(f"{dfname} already exists")
+else:
+    print(f"Creating {dfname}")
+    with open(dfname, "w") as fd:
+        fd.write(dockerfile)

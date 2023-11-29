@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+from shutil import which
+from subprocess import Popen, PIPE
 from typing import Optional, cast, Dict, List, Union, Tuple, Final, Set
 from requests.exceptions import ConnectionError
 from time import sleep, time
@@ -121,6 +123,15 @@ def manual(word : str, code : int)->None:
     print("Action: Setting '%s' to '%d'" % (word, code))
     cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (word,code))
     conn.commit()
+
+def word_in_dict(word : str):
+    if which("dict") is None:
+        return True
+    p = Popen(["dict",word],universal_newlines=True,stdout=PIPE,stderr=PIPE)
+    o, e = p.communicate()
+    #if p.returncode != 0:
+    #    print(colored(f" --> word={word}, rc={p.returncode}","red"))
+    return p.returncode == 0
     
 def check(word:str,force:bool=False)->bool:
     global disable_web
@@ -137,6 +148,12 @@ def check(word:str,force:bool=False)->bool:
         rword = word.replace("'","''")
         cursor.execute("SELECT code FROM words WHERE word = '%s'" % rword)
         result = cursor.fetchone()
+        if force or result == None:
+            if word_in_dict(rword):
+                status_code = 207
+                cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
+                conn.commit()
+                result = (status_code,)
         if force or result == None:
             order = [1,2,3,4]
             shuffle(order)
@@ -428,11 +445,16 @@ for a in pres.files:
         try:
             with open(a,"r") as fd:
                 for line in fd.readlines():
+                    line = re.sub(r'\\cite{[^}]*}',' ', line)
+                    if re.match(r'^\s*%', line):
+                        continue
+                    #if "\cite{" in line:
+                    #    raise Exception(line)
                     out = do_text(line)
                     fw.write(out)
         finally:
             fw.close()
-    elif re.match(r'.*\.(tex|java)$',a):
+    elif re.match(r'.*\.(java)$',a):
         with open(a,"r") as fd:
             for line in fd.readlines():
                 do_text(re.sub(r'\\\w+',' ',line))
