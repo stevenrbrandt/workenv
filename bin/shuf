@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+import sys
+from random import shuffle
+
+items = [x for x in sys.stdin.readlines()]
+shuffle(items)
+for item in items:
+    print(item,end='')
