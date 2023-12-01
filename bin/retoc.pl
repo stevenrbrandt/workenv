@@ -37,7 +37,9 @@ while(my $line=<$fd>) {
 close($fd);
 if($sub > 0) {
     my $diff = $sum - $sub;
+    my $min = 50_000 - $diff;
     print "\nSUM = $sum = SUM - $sub = $diff\n";
+    print "50,000 - $diff = $min\n";
 } else {
     print "\nSUM = $sum\n";
 }
