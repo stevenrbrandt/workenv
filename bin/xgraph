@@ -14,8 +14,9 @@ M = False
 xlim = None
 ylim = None
 col = 1
+save_fig = False
 
-opts, files = getopt(sys.argv[1:],":mM",["lx","ly","loc=",'col='])
+opts, files = getopt(sys.argv[1:],":smM",["lx","ly","loc=",'col='])
 
 loc = "best"
 
@@ -32,6 +33,8 @@ for o,a in opts:
         col = int(a)
     elif o == "--loc":
         loc = a
+    elif o == "-s":
+        save_fig = True
 
 xmin, xmax = None, None
 ymin, ymax = None, None
@@ -95,4 +98,8 @@ for a in files:
     else:
         pfun(xv,yv,label=a)
     plt.legend(loc=loc)
-plt.show()
+
+if save_fig:
+    plt.savefig("image.png")
+else:
+    plt.show()

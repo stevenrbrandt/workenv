@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 import sys
-from random import shuffle
-
-items = [x for x in sys.stdin.readlines()]
-shuffle(items)
-for item in items:
-    print(item,end='')
+values = []
+from random import randint
+for a in sys.argv[1:]:
+    with open(a, "r") as fd:
+        for line in fd.readlines():
+            values += [line.strip()]
+n = len(values)-1
+for i in range(n):
+    r = randint(i,n)
+    values[i],values[r] = values[r],values[i]
+for value in values:
+    print(value)
+    
