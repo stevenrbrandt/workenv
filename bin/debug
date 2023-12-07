@@ -13,6 +13,7 @@ push @cmd, "--eval-command=b exit";
 push @cmd, "--eval-command=$run";
 push @cmd, "--eval-command=where";
 push @cmd, "--eval-command=quit";
+# push @cmd, "--eval-command=futex";
 push @cmd, $cmd;
 print join(" ",@cmd),"\n";
 close(STDIN);
