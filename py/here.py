@@ -25,6 +25,9 @@ def herell(usecc,*args):
     frame = None
     stack = None
 
+def foo():
+    here()
 if __name__ == "__main__":
     here(1,_here)
     herecc(2,_here)
+    foo()

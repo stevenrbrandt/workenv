@@ -21,6 +21,7 @@ t1 : Final = time()
 class fake_res:
     def __init__(self)->None:
         self.content = b'invalid'
+        self.status_code = 666
 
 def code_func(arg : str)->int:
     if re.match(r'[24]0\d', arg):
@@ -73,7 +74,7 @@ def check_web(num : int,word : str,force : bool=False)->int:
         return 444
 
     sleep(2)
-    ret = 0
+    ret : int = 0
     res : Union[fake_res,requests.Response] = fake_res()
     if num == 1:
         wword = word.replace("'","-")
@@ -124,7 +125,7 @@ def manual(word : str, code : int)->None:
     cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (word,code))
     conn.commit()
 
-def word_in_dict(word : str):
+def word_in_dict(word : str)->bool:
     if which("dict") is None:
         return True
     p = Popen(["dict",word],universal_newlines=True,stdout=PIPE,stderr=PIPE)
@@ -189,17 +190,21 @@ try:
 except:
   pass
 
-miss : Dict[str,int] = {}
+miss : Dict[str,Tuple[int,Set[str]]] = {}
 
-def inc_miss(w : str)->None:
+def inc_miss(w : str, fname : str)->None:
     if w not in miss:
-        miss[w] = 1
+        miss[w] = (1,{fname})
     else:
-        miss[w] += 1
+        s2 : Set[str] = set()
+        for item in miss[w][1]:
+            s2.add(item)
+        s2.add(fname)
+        miss[w] = (miss[w][0], s2)
 
 for word in pres.words:
     if not check(word,force=pres.enable_web):
-        inc_miss(word)
+        inc_miss(word,"[sys.arv]")
 
 def score(w1 : str,w2 : str)->int:
     sc : Dict[str,int] = {}
@@ -296,7 +301,7 @@ def suggest(word:str,use3:bool=True)->str:
     suggest_cache[use3][word] = retval
     return retval
 
-def do_text(text:str)->str:
+def do_text(text:str, fname:str)->str:
     # Remove enclosing double quotes
     text = re.sub(r"``([^']*)''",r'\1',text)
     # Remove enclosing single quotes
@@ -340,7 +345,7 @@ def do_text(text:str)->str:
             if pres.vdiff:
                 s += w.group()
         else:
-            inc_miss(word)
+            inc_miss(word,fname)
             n = 0
             wl : List[str] = []
             for w2 in suggest3(word):
@@ -367,25 +372,25 @@ def get_name(elem : 'xml.etree.ElementTree.Element')->str:
         raise Exception(str(elem))
     return g.group(1)
 
-def do_tree(tree : 'xml.etree.ElementTree.Element')->None:
+def do_tree(tree : 'xml.etree.ElementTree.Element', fname:str)->None:
     global text_file
     name = get_name(tree)
     if name == 't' and tree.text is not None:
         text_file += tree.text
     if name == 'p':
-        do_text(text_file)
+        do_text(text_file, fname)
         text_file = ''
     for t in tree:
-        do_tree(t)
+        do_tree(t, fname)
 
-def do_soup(tag : 'BeautifulSoup')->None:
+def do_soup(tag : 'BeautifulSoup', fname:str)->None:
     if not hasattr(tag,"name"):
         return
     if tag.name in ["p","i","li","td"]:
         if hasattr(tag,"text"):
-            do_text(tag.text)
+            do_text(tag.text, fname)
     for t in tag:
-        do_soup(t)
+        do_soup(t, fname)
 
 from threading import Thread
 from queue import Queue
@@ -446,41 +451,43 @@ for a in pres.files:
             with open(a,"r") as fd:
                 for line in fd.readlines():
                     line = re.sub(r'\\cite{[^}]*}',' ', line)
+                    line = re.sub(r'\\text(it|tt|bf){([^}]*)}',r'\2', line)
+                    line = re.sub(r'\$\\mathcal{([^}]*)}\$',r'\1', line)
                     if re.match(r'^\s*%', line):
                         continue
                     #if "\cite{" in line:
                     #    raise Exception(line)
-                    out = do_text(line)
+                    out = do_text(line, a)
                     fw.write(out)
         finally:
             fw.close()
     elif re.match(r'.*\.(java)$',a):
         with open(a,"r") as fd:
             for line in fd.readlines():
-                do_text(re.sub(r'\\\w+',' ',line))
+                do_text(re.sub(r'\\\w+',' ',line),a)
     elif re.match(r'.*\.html$',a):
         from bs4 import BeautifulSoup
         with open(a,"r") as fd:
             contents = fd.read()
         soup = BeautifulSoup(contents)
-        do_soup(soup)
+        do_soup(soup, a)
         #for tag in soup:
         #    if hasattr(tag,'text'):
         #        #do_text(tag.text)
         #        print(tag.name)
-    elif re.match(r'.*\.docx',a):
+    elif re.match(r'.*\.docx', a):
         import zipfile
         import xml.etree.ElementTree as ET
         document = zipfile.ZipFile(a)
         xml_content = document.read('word/document.xml')
         tree : 'xml.etree.ElementTree.Element' = ET.fromstring(xml_content)
         text_file = ''
-        do_tree(tree)
-        do_text(text_file)
-    elif re.match(r'.*\.pdf',a):
+        do_tree(tree, a)
+        do_text(text_file, a)
+    elif re.match(r'.*\.pdf', a):
         from tika import parser as tika_parser
         raw = tika_parser.from_file(a)
-        do_text(raw['content'])
+        do_text(raw['content'], a)
     else:
         print("Unknown file type:",a)
 

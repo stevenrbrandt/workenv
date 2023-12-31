@@ -812,7 +812,7 @@ while(<$fdr>) {
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/\\dropcap2 $&/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\pvpara\\wraparound\\dropcapli2\\dropcapt1{$&}}/;
         }
-        die "($`)$&($'): $_" if ($_ =~ /[\x80-\xFF]/);
+        die "bad encoding on line $. ($`)$&($'): $_" if ($_ =~ /[\x80-\xFF]/);
         print $fdw $_;
     }
 }
@@ -908,6 +908,8 @@ sub accent {
   $txt =~ s/ñ/\\u241\\'f1/g;
   $txt =~ s/ī/\\u299\\'ab/g;
   $txt =~ s/ć/\\u263\\'87/g;
+  $txt =~ s/Ö/\\u214\\'D6/g; # check
+  $txt =~ s/ö/\\u246\\'B6/g; # check
   # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
   $txt =~ s/<q>/qnum()/ge;
