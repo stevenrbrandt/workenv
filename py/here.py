@@ -4,13 +4,13 @@ import re
 
 _here = re.sub(r'/*$','/',os.path.realpath(os.getcwd()))
 
-def here(*args):
-    herell(False,*args)
+def here(*args, **kwargs):
+    herell(False, *args, **kwargs)
 
-def herecc(*args):
-    herell(True,*args)
+def herecc(*args, **kwargs):
+    herell(True,*args, **kwargs)
 
-def herell(usecc,*args):
+def herell(usecc, *args, **kwargs):
     import inspect
     stack = inspect.stack()
     frame = stack[2]
@@ -21,7 +21,7 @@ def herell(usecc,*args):
     fname = os.path.realpath(frame.filename)
     if fname.startswith(_here):
         fname = fname[len(_here):]
-    print(colored(herestr,"cyan"),fname+":"+colored(frame.lineno,"yellow"), *args, flush=True)
+    print(colored(herestr,"cyan"),fname+":"+colored(frame.lineno,"yellow"), *args, flush=True, **kwargs)
     frame = None
     stack = None
 
