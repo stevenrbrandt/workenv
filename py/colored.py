@@ -1,9 +1,13 @@
+from typing_extensions import Literal
+from typing import Any, Dict
 import sys
 
-def not_colored(a,_):
-    return repr(a)
+color_names = Literal["red","green","yellow","blue","magenta","cyan"]
 
-colors = {
+def not_colored(arg:Any,c:color_names)->str:
+    return repr(arg)
+
+colors : Dict[color_names,str] = {
   "red":"\033[31m",
   "green":"\033[32m",
   "yellow":"\033[33m",
@@ -13,7 +17,7 @@ colors = {
 }
 reset = "\033[0m"
 
-def colored(arg,c):
+def colored(arg:Any,c:color_names)->str:
     assert type(c) == str
     assert c in colors
     s = str(arg)
@@ -29,7 +33,4 @@ if (not is_tty) and (not is_jupyter):
     colored = not_colored
 
 if __name__ == "__main__":
-    if installed:
-        print(colored("Colored was installed","green"))
-    else:
-        print("Colored was NOT installed")
+    print(colored("red", "red"), colored("green", "green"))
