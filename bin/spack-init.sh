@@ -17,8 +17,8 @@ then
         module purge
         module load gcc/11.2.0
         module load cuda/12.1.1
-        module load python/3.7.6
+        #module load python/3.7.6
     fi
     spack compiler find
-    spack external find --not-buildable perl python cuda diffutils findutils tar xz curl pkgconf zlib gmake git
+    spack external find --not-buildable perl cuda diffutils findutils tar xz curl pkgconf zlib gmake git # python
 fi
