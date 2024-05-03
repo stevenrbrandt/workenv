@@ -12,7 +12,6 @@ import sqlite3
 import os
 import sys
 import re
-import argparse
 import xml
 from colored import colored
 
@@ -33,6 +32,7 @@ def code_func(arg : str)->int:
     else:
         raise ValueError("bad arg: "+arg)
 
+import argparse
 parser = argparse.ArgumentParser(prog='pyspell', description='Python-Based Spell Checker')
 parser.add_argument('--files', type=str, nargs='+', default='', help='files to check')
 parser.add_argument('--set', type=str, nargs=1, default="", help='word to set code for')

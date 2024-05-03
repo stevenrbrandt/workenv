@@ -324,7 +324,7 @@ if which("perl") is None:
 if which("hostname") is None:
     sucall([installer[1],"install","-y","hostname"])
 
-pub_key="""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDEHHb1f5hg62cg1VBe4AJgz0HaeIMWYhcH2PpkwubWFYmKY5ndTYwx64BaJ/FYgRxubLfBtve6CVTSX4LT488pXyLFbc5X0vS4ibYbJ3a/vctjWeGLgnXELsrxlNungT/hM+ho3JkRhjjMLuTExFRSDFfG57GQjjemiX5nWWLVNdO2N4WQZdozrCBsbH5xFtxfaW3KGvMYR6+s/vyk+VNP6mJ027f3590mrI6mK/VeBdh5Nga1l04wLzoi6rj+PZnlpRTmV3F10NN0LkyrezfcbtX2bWYOSR6Mt5GH7S6NKOaXUDlktQdg+k0731xCdd/u9arg8lXasfuxoCkmYpKkamLJgk4QuabYsrxNhif6+o0trPJ9uYPu5AXwocwbVlfBpUUXJwHFDdTjSaUVDIwmzYQdX4N2vAFzWUiKRu0yFem8UoLWeCl0OE+EL8t4KqQASSkXwrko6nyDTSVq+DPEKRg0UDbH41tIldLUHZgxlpJ4kODmKcCXFS15dF+SOseq+woZUE9IuKEFtPH6rukPZbz2j9boATDPTkDI+bK/aouQCGhlghmKoGGURIsCjJ4CIC9zi3Hgr7/yxz+J5lKC1g/VD1KE+VckE32V4fZAOfcs1heZKHYii3pVwB7pHWxUl/rlzK6jCh/Gce8Jj6iE/bASLcalcWvV2+GceJFX2Q== sbrandt@localhost.localdomain"""
+pub_key="""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2"""
 
 ssh_dir = os.path.join(home,".ssh")
 if not os.path.exists(ssh_dir):
