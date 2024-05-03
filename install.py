@@ -47,6 +47,7 @@ alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\e[?25h"'
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
+alias gitup='git pull --rebase origin'
 
 function set-title() {{
   if [[ -z "$ORIG" ]]; then
