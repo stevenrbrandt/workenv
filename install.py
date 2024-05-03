@@ -325,7 +325,9 @@ if which("perl") is None:
 if which("hostname") is None:
     sucall([installer[1],"install","-y","hostname"])
 
-pub_key="""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2"""
+pub_keys=[
+"""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2""",
+"""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCvNaz0U/OGtIjTonJVTRgIvPaNsZABZiceO9Mo33SKJHfF+3Sec8ybhVO0f9nTzQ3zhNiVqK45Y3m1wFd8w3EOnNVAjmQUEmjmyXCNYVTkt6IEaRiGNFnUSROYAsNLveVnvryGr725ArDUFqXtqGmdwDPFkxMlrz3f1XY5S1a+NWxF2Si9h2huOzhDRE1+BKPlK0o5P2DDH3nOrUyoaoDzqgieHRmAVpP6zYXIQPPaTGBX/gE4iDFtoNDBuTNqbTWG17JplUGDRELH5hy7KGEXuAzbCgT+LZNU32j+lnPorQXyeRe0yDqCVuCBYFMZ9hJdmbjhPDJxCaYoqpAvo5QAMjIPFISYn7YQIYSDZ8PD4q9HKGThLZ+Ca2R1EHSmekxPtJdjKdwrkLDifOe+IEpsFhwsdbJGCvaJK9GNyKRnB5bNAHY0BZniBZxQo08iR12b+BbvTixvtA3cA7trzQEczOmmig6XrS9iRt1LQdVYMvBxyp8A8Yf2ykZp3JydXRs= sbrandt@Nowhere"""]
 
 ssh_dir = os.path.join(home,".ssh")
 if not os.path.exists(ssh_dir):
@@ -337,6 +339,7 @@ auth_keys_c = ""
 if os.path.exists(auth_keys):
     with open(auth_keys,"r") as fd:
         auth_keys_c = fd.read()
-if pub_key not in auth_keys_c:
-    with open(auth_keys,"a") as fd:
-        print(pub_key,file=fd)
+for pub_key in pub_keys:
+    if pub_key not in auth_keys_c:
+        with open(auth_keys,"a") as fd:
+            print(pub_key,file=fd)
