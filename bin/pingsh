@@ -1,0 +1,3 @@
+#!/bin/bash
+telegram-send "qbd login $(date)"
+exec bash
