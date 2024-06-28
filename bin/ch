@@ -5,6 +5,7 @@ my %bookmarks = (
     #"zoom" => ["https://lsu.zoom.us/j/631356683"],
     "kdp"=>["https://www.amazon.com/kindle-vella/widget/story/B0981R33MB/author/comments"],
     "gitter"=>["https://gitter.im/EinsteinToolkit/EinsteinToolkit"],
+    "tests"=>["http://einsteintoolkit.org/testsuite_results/index.php"],
     "carpetx"=>["https://bitbucket.org/eschnett/cactusamrex/wiki/To%20Do%20List"],
     "printer"=>["http://10.20.106.20/"],
     "book"=>["https://docs.google.com/document/d/1m9JrzgEkme9f3dtKI4xVZGeuUDtv50J2r-m_ZKB3L1Q/edit"],
