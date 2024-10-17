@@ -44,7 +44,7 @@ alias vi=vim
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
-alias show-cursor='echo -en "\e[?25h"'
+alias show-cursor='echo -en "\033[?25h"'
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
 alias gitup='git pull --rebase origin'
@@ -53,12 +53,12 @@ function set-title() {{
   if [[ -z "$ORIG" ]]; then
     ORIG=$PS1
   fi
-  TITLE="\[\e]2;$*\\a\]"
+  TITLE="\\[\033]2;$*\\a\\]"
   PS1=${{ORIG}}${{TITLE}}
 }}
 
 #function set-title() {{
-#    printf "\e]2;$*\\a"
+#    printf "\033]2;$*\\a"
 #}}
 
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
