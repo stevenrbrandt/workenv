@@ -20,5 +20,5 @@ then
         #module load python/3.7.6
     fi
     spack compiler find
-    spack external find --not-buildable perl cuda diffutils findutils tar xz curl pkgconf zlib gmake git # python
+    spack external find --not-buildable perl cuda diffutils findutils tar xz pkgconf zlib gmake git # python curl
 fi
