@@ -22,7 +22,7 @@ Louisiana
 Baton Rouge
 Louisiana State University
 Center for Computation and Technology
-$CERT_NAME
+localhost
 sbrandt@cct.lsu.edu
 EOF
     mkdir -p etc/ssl/private

@@ -1,1 +1,1 @@
-(cd /mnt/c && /mnt/c/Windows/System32/clip.exe) < $*
+sed 's/\r//g' < $* | (cd /mnt/c && /mnt/c/Windows/System32/clip.exe) 
