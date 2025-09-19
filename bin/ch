@@ -145,6 +145,7 @@ sub file {
 
 my @cmd = (
  "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+ "/mnt/c/Users/steve/AppData/Local/Programs/Opera Air/opera.exe",
  "/mnt/c/Users/steve/AppData/Local/Programs/Opera/opera.exe",
  "/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe",
  "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
@@ -160,6 +161,7 @@ for $c (@cmd) {
         print("  --not found: $c\n");
     }
 }
+$cmd =~ s/ /\\ /g;
 print("Using: $cmd\n");
 
 die unless(defined($cmd));

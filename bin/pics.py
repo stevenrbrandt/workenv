@@ -15,7 +15,7 @@ files = sorted(files, key=mtime)
 with open("index.html", "w") as fd:
     for f in files:
         print(f"""
-<a style="float: right" href='file:{f}'>
+<a style="border: 2px solid black; float: right" href='file:{f}'>
   <img width=400 src='file:{f}' alt='{f}' />
   <div>{f}</div>
 </a>
