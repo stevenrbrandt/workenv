@@ -200,7 +200,7 @@ def inc_miss(w : str, fname : str)->None:
         for item in miss[w][1]:
             s2.add(item)
         s2.add(fname)
-        miss[w] = (miss[w][0], s2)
+        miss[w] = (miss[w][0]+1, s2)
 
 for word in pres.words:
     if not check(word,force=pres.enable_web):

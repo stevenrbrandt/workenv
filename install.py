@@ -40,11 +40,18 @@ then
     export PYTHONPATH="$HOME/repos/workenv/py:$PYTHONPATH"
 fi
 
+if [ -d ~/venv ]
+then
+    source ~/venv/bin/activate
+fi
+
 alias vi=vim
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
 alias show-cursor='echo -en "\033[?25h"'
+#alias show-cursor='echo -en "\\x1b[?25h"'
+>>>>>>> 7e96b503057cbf5a6a75a9f6195bd17b813ab478
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
 alias gitup='git pull --rebase origin'
@@ -54,11 +61,13 @@ function set-title() {{
     ORIG=$PS1
   fi
   TITLE="\\[\033]2;$*\\a\\]"
+  #TITLE="\\[\x1b]2;$*\\a\\]"
   PS1=${{ORIG}}${{TITLE}}
 }}
 
 #function set-title() {{
 #    printf "\033]2;$*\\a"
+#    printf "\x1b]2;$*\\a"
 #}}
 
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
@@ -325,7 +334,9 @@ if which("perl") is None:
 if which("hostname") is None:
     sucall([installer[1],"install","-y","hostname"])
 
-pub_key="""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2"""
+pub_keys=[
+"""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2""",
+"""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCvNaz0U/OGtIjTonJVTRgIvPaNsZABZiceO9Mo33SKJHfF+3Sec8ybhVO0f9nTzQ3zhNiVqK45Y3m1wFd8w3EOnNVAjmQUEmjmyXCNYVTkt6IEaRiGNFnUSROYAsNLveVnvryGr725ArDUFqXtqGmdwDPFkxMlrz3f1XY5S1a+NWxF2Si9h2huOzhDRE1+BKPlK0o5P2DDH3nOrUyoaoDzqgieHRmAVpP6zYXIQPPaTGBX/gE4iDFtoNDBuTNqbTWG17JplUGDRELH5hy7KGEXuAzbCgT+LZNU32j+lnPorQXyeRe0yDqCVuCBYFMZ9hJdmbjhPDJxCaYoqpAvo5QAMjIPFISYn7YQIYSDZ8PD4q9HKGThLZ+Ca2R1EHSmekxPtJdjKdwrkLDifOe+IEpsFhwsdbJGCvaJK9GNyKRnB5bNAHY0BZniBZxQo08iR12b+BbvTixvtA3cA7trzQEczOmmig6XrS9iRt1LQdVYMvBxyp8A8Yf2ykZp3JydXRs= sbrandt@Nowhere"""]
 
 ssh_dir = os.path.join(home,".ssh")
 if not os.path.exists(ssh_dir):
@@ -337,6 +348,7 @@ auth_keys_c = ""
 if os.path.exists(auth_keys):
     with open(auth_keys,"r") as fd:
         auth_keys_c = fd.read()
-if pub_key not in auth_keys_c:
-    with open(auth_keys,"a") as fd:
-        print(pub_key,file=fd)
+for pub_key in pub_keys:
+    if pub_key not in auth_keys_c:
+        with open(auth_keys,"a") as fd:
+            print(pub_key,file=fd)
