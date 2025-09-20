@@ -21,6 +21,11 @@ if not found:
 
 with open(os.path.join(home,".bashaux"),"w") as fd:
     print("""
+if [ -d ~/venv ]
+then
+    source ~/venv/bin/activate
+fi
+
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 if [ "$PYTHONUSERBASE" = "" ]
@@ -38,11 +43,6 @@ fi
 if [ -d ~/repos/workenv/py ]
 then
     export PYTHONPATH="$HOME/repos/workenv/py:$PYTHONPATH"
-fi
-
-if [ -d ~/venv ]
-then
-    source ~/venv/bin/activate
 fi
 
 alias vi=vim
