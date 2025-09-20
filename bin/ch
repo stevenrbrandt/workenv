@@ -144,6 +144,7 @@ sub file {
 my @cmd = (
  "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
  "/mnt/c/Users/steve/AppData/Local/Programs/Opera/opera.exe",
+ "/mnt/c/Users/steve/AppData/Local/Programs/Opera GX/opera.exe",
  "/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe",
  "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 );
@@ -152,7 +153,7 @@ my $cmd = undef;
 for $c (@cmd) {
     if(-e $c) {
         print("FOUND: $c\n");
-        $cmd = $c;
+        $cmd = "'$c'";
         last;
     } else {
         print("  --not found: $c\n");
