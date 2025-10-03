@@ -1,0 +1,5 @@
+#!/bin/bash
+JAR="/home/sbrandt/LSUOneDrive/repos/FlourLang/build/libs/flouri.jar"
+prog=$1
+shift
+java -jar $JAR $prog -- $*
