@@ -299,6 +299,7 @@ if not os.path.exists(gitconf):
   whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
     autocrlf = false
     safecrlf = false
+	fileMode = false
 [credential]
     helper = store
 [push]
