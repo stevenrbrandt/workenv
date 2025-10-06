@@ -14,11 +14,14 @@ import sys
 from subprocess import call
 import pwd
 
-if len(sys.argv) < 1:
-    print("Usage: "+sys.argv[0]+" docker-image")
-    exit(2)
+import argparse
+parser = argparse.ArgumentParser(prog='doc-dev', description='Python-Based Spell Checker')
+parser.add_argument('--port', type=int, default=-1, help='files to check')
+parser.add_argument('--cmd', type=str, default="", help='files to check')
+parser.add_argument('image')
+pres=parser.parse_args(sys.argv[1:])
 
-image = sys.argv[1]
+image = pres.image
 user_id = os.getuid()
 pw = pwd.getpwuid(user_id)
 user_name = pw.pw_name
@@ -53,6 +56,15 @@ alias vi=vim
     except:
         print_exc()
 
-cmd = ["docker","run","--rm","-it","--user","0","--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,"bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d '{dir_name}' > /dev/null; usermod -d '{here}' $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1); su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1) {args}"]
+if pres.port != -1:
+    port_arg = ["-p", f"{pres.port}:{pres.port}"]
+else:
+    port_arg = []
+print("port:",port_arg)
+print("image:",image)
+cmd = ["docker",
+    "run","--rm","-it"]+port_arg+["--user","0",
+    "--mount",f"type=bind,source={here},target={dir_name}","-w",dir_name,image,
+    "bash","-c",f"useradd -m {user_name} -u {user_id} -s /bin/bash -d '{dir_name}' > /dev/null; usermod -d '{here}' $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1); su $(cut -d: -f1,3 < /etc/passwd|grep :{user_id}|cut -d: -f1) {pres.cmd}"]
 print(cmd)
 call(cmd)

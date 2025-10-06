@@ -21,6 +21,11 @@ if not found:
 
 with open(os.path.join(home,".bashaux"),"w") as fd:
     print("""
+if [ -d ~/venv ]
+then
+    source ~/venv/bin/activate
+fi
+
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 if [ "$PYTHONUSERBASE" = "" ]
@@ -44,7 +49,8 @@ alias vi=vim
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
-alias show-cursor='echo -en "\e[?25h"'
+alias show-cursor='echo -en "\033[?25h"'
+#alias show-cursor='echo -en "\\x1b[?25h"'
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
 alias gitup='git pull --rebase origin'
@@ -53,12 +59,14 @@ function set-title() {{
   if [[ -z "$ORIG" ]]; then
     ORIG=$PS1
   fi
-  TITLE="\[\e]2;$*\\a\]"
+  TITLE="\\[\033]2;$*\\a\\]"
+  #TITLE="\\[\x1b]2;$*\\a\\]"
   PS1=${{ORIG}}${{TITLE}}
 }}
 
 #function set-title() {{
-#    printf "\e]2;$*\\a"
+#    printf "\033]2;$*\\a"
+#    printf "\x1b]2;$*\\a"
 #}}
 
 if [ -r /usr/bin/hostname -o -r /bin/hostname ]
@@ -95,9 +103,23 @@ unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
-shopt -s histappend                      # append to history, don't overwrite it
-export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
-export HISTSIZE=100000
+
+HISTCONTROL=ignoreboth
+
+# append to the history file, don't overwrite it
+shopt -s histappend
+
+# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
+export HISTSIZE=-1
+export HISTFILESIZE=-1
+
+# check the window size after each command and, if necessary,
+# update the values of LINES and COLUMNS.
+shopt -s checkwinsize
+
+# Find out more about prompt command
+#export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+
 alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 alias git-clear-passwd='git config --global credential.helper store'
 if [ "$SPACK_ROOT" != "" ]
@@ -277,6 +299,7 @@ if not os.path.exists(gitconf):
   whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
     autocrlf = false
     safecrlf = false
+	fileMode = false
 [credential]
     helper = store
 [push]
@@ -325,7 +348,9 @@ if which("perl") is None:
 if which("hostname") is None:
     sucall([installer[1],"install","-y","hostname"])
 
-pub_key="""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDEHHb1f5hg62cg1VBe4AJgz0HaeIMWYhcH2PpkwubWFYmKY5ndTYwx64BaJ/FYgRxubLfBtve6CVTSX4LT488pXyLFbc5X0vS4ibYbJ3a/vctjWeGLgnXELsrxlNungT/hM+ho3JkRhjjMLuTExFRSDFfG57GQjjemiX5nWWLVNdO2N4WQZdozrCBsbH5xFtxfaW3KGvMYR6+s/vyk+VNP6mJ027f3590mrI6mK/VeBdh5Nga1l04wLzoi6rj+PZnlpRTmV3F10NN0LkyrezfcbtX2bWYOSR6Mt5GH7S6NKOaXUDlktQdg+k0731xCdd/u9arg8lXasfuxoCkmYpKkamLJgk4QuabYsrxNhif6+o0trPJ9uYPu5AXwocwbVlfBpUUXJwHFDdTjSaUVDIwmzYQdX4N2vAFzWUiKRu0yFem8UoLWeCl0OE+EL8t4KqQASSkXwrko6nyDTSVq+DPEKRg0UDbH41tIldLUHZgxlpJ4kODmKcCXFS15dF+SOseq+woZUE9IuKEFtPH6rukPZbz2j9boATDPTkDI+bK/aouQCGhlghmKoGGURIsCjJ4CIC9zi3Hgr7/yxz+J5lKC1g/VD1KE+VckE32V4fZAOfcs1heZKHYii3pVwB7pHWxUl/rlzK6jCh/Gce8Jj6iE/bASLcalcWvV2+GceJFX2Q== sbrandt@localhost.localdomain"""
+pub_keys=[
+"""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2""",
+"""ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCvNaz0U/OGtIjTonJVTRgIvPaNsZABZiceO9Mo33SKJHfF+3Sec8ybhVO0f9nTzQ3zhNiVqK45Y3m1wFd8w3EOnNVAjmQUEmjmyXCNYVTkt6IEaRiGNFnUSROYAsNLveVnvryGr725ArDUFqXtqGmdwDPFkxMlrz3f1XY5S1a+NWxF2Si9h2huOzhDRE1+BKPlK0o5P2DDH3nOrUyoaoDzqgieHRmAVpP6zYXIQPPaTGBX/gE4iDFtoNDBuTNqbTWG17JplUGDRELH5hy7KGEXuAzbCgT+LZNU32j+lnPorQXyeRe0yDqCVuCBYFMZ9hJdmbjhPDJxCaYoqpAvo5QAMjIPFISYn7YQIYSDZ8PD4q9HKGThLZ+Ca2R1EHSmekxPtJdjKdwrkLDifOe+IEpsFhwsdbJGCvaJK9GNyKRnB5bNAHY0BZniBZxQo08iR12b+BbvTixvtA3cA7trzQEczOmmig6XrS9iRt1LQdVYMvBxyp8A8Yf2ykZp3JydXRs= sbrandt@Nowhere"""]
 
 ssh_dir = os.path.join(home,".ssh")
 if not os.path.exists(ssh_dir):
@@ -337,6 +362,7 @@ auth_keys_c = ""
 if os.path.exists(auth_keys):
     with open(auth_keys,"r") as fd:
         auth_keys_c = fd.read()
-if pub_key not in auth_keys_c:
-    with open(auth_keys,"a") as fd:
-        print(pub_key,file=fd)
+for pub_key in pub_keys:
+    if pub_key not in auth_keys_c:
+        with open(auth_keys,"a") as fd:
+            print(pub_key,file=fd)

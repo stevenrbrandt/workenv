@@ -11,6 +11,9 @@ last_was_tag = False
 lastP = False
 comments = {}
 
+def nz(x):
+    return not(x is None or x == 0)
+
 def fix(s):
     s = re.sub(r'…','...',s)
     s = re.sub(r"’","'",s)
@@ -19,8 +22,10 @@ def fix(s):
     s = re.sub(r'\s*–\s*','--',s)
     s = re.sub(r'\s*—\s*',"--",s)
     s = re.sub(r'</i><i>',"",s)
-    s = re.sub(r'\s+$','',s)
+    s = re.sub(r'<i> ',r' <i>',s)
+    s = re.sub(r' </i>',r'</i> ',s)
     s = re.sub(r'^\s+','',s)
+    s = re.sub(r'\s+$','',s)
     return s
 
 def save(content,file_name):
@@ -83,11 +88,10 @@ def do_elem(elem,ind='',quote=False):
     if name == "del":
         return props
     if name == "ind":
-        if not props["quote"] and get_attr(elem,"left"):
+        if not props["quote"] and nz(get_attr(elem,"right")):
             if not lastP:
                 if use_italics:
-                    print("<quote>")
-                    print()
+                    print("<quote>",end="")
             lastP = True
             props["quote"] = True
     elif name == "i":
@@ -147,7 +151,6 @@ def do_elem(elem,ind='',quote=False):
         if lastP and not props["quote"]:
             if use_italics:
                 print("</quote>")
-                print()
             off = True
             lastP = False
         txt = props["text"].strip()
@@ -159,7 +162,10 @@ def do_elem(elem,ind='',quote=False):
                 print("\n<scene>",end='')
             else:
                 txt = re.sub(r'Chapter\s+\d+:?\s*','',txt)
-                print("\n<chapter=\"%s\">" % txt,end='')
+                if re.match(r'^\s*(<i>|)#(</i>|)\s*',txt):
+                    print("\n<scene>",end='')
+                else:
+                    print("\n<chapter=\"%s\">" % txt,end='')
         elif re.match(r'^\s*#\s*',txt):
             print("\n<scene>",end='')
         else:

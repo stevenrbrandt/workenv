@@ -12,7 +12,6 @@ import sqlite3
 import os
 import sys
 import re
-import argparse
 import xml
 from colored import colored
 
@@ -33,6 +32,7 @@ def code_func(arg : str)->int:
     else:
         raise ValueError("bad arg: "+arg)
 
+import argparse
 parser = argparse.ArgumentParser(prog='pyspell', description='Python-Based Spell Checker')
 parser.add_argument('--files', type=str, nargs='+', default='', help='files to check')
 parser.add_argument('--set', type=str, nargs=1, default="", help='word to set code for')
@@ -73,7 +73,6 @@ def check_web(num : int,word : str,force : bool=False)->int:
     if disable_web:
         return 444
 
-    sleep(2)
     ret : int = 0
     res : Union[fake_res,requests.Response] = fake_res()
     if num == 1:
@@ -89,6 +88,7 @@ def check_web(num : int,word : str,force : bool=False)->int:
         pword = word.replace("'","%27")
         url = "https://www.thefreedictionary.com/%s" % pword
         try:
+            sleep(2)
             res = requests.get(url, timeout=tmout)
         except:
             ret = 404
@@ -98,6 +98,7 @@ def check_web(num : int,word : str,force : bool=False)->int:
     elif num == 4:
         nword = word.replace("'","")
         url = "https://www.collinsdictionary.com/us/dictionary/english/%s" % nword
+        sleep(2)
         res = requests.get(url, timeout=tmout)
         ret = 200
 
@@ -200,7 +201,7 @@ def inc_miss(w : str, fname : str)->None:
         for item in miss[w][1]:
             s2.add(item)
         s2.add(fname)
-        miss[w] = (miss[w][0], s2)
+        miss[w] = (miss[w][0]+1, s2)
 
 for word in pres.words:
     if not check(word,force=pres.enable_web):
