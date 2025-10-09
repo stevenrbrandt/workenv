@@ -1,6 +1,13 @@
 HERE=$PWD
 set -ex
-curl -LO https://raw.githubusercontent.com/gridaphobe/CRL/master/GetComponents
+if [ ! -r GetComponents ]
+then
+  curl -LO https://raw.githubusercontent.com/gridaphobe/CRL/master/GetComponents
+  chmod a+x GetComponents
+fi
+rm -f einsteintoolkit.th
+curl -LO https://bitbucket.org/einsteintoolkit/manifest/raw/master/einsteintoolkit.th
+#curl -LO https://raw.githubusercontent.com/gridaphobe/CRL/master/GetComponents
 chmod a+x GetComponents
 if [ ! -d Cactus ]
 then

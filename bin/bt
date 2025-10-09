@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 while(<>) {
-    if(m{([\w/\.]*/cactus_\w+).*[\[+]0x([a-fA-F0-9]+)[\])]}) {
+    if(m{([\w/\.]*/cactus_[-\w]+).*[\[+]0x([a-fA-F0-9]+)[\])]}) {
         my ($exe,$addr)=($1,$2,$3);
+        print("addr2line -e $exe -f -p $addr\n");
         system("addr2line -e $exe -f -p $addr");
     }
 }
