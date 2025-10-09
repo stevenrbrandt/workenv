@@ -1,4 +1,6 @@
 #!/usr/bin/perl
+# in gdb: "list *address"
+# if clang was used: "llvm-symbolizer -e myprogram 0x804d5ce"
 while(<>) {
     if(m{([\w/\.]*/cactus_[-\w]+).*[\[+]0x([a-fA-F0-9]+)[\])]}) {
         my ($exe,$addr)=($1,$2,$3);
