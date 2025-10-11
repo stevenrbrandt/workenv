@@ -162,7 +162,7 @@ for $c (@cmd) {
         print("  --not found: $c\n");
     }
 }
-$cmd =~ s/ /\\ /g;
+#$cmd =~ s/ /\\ /g;
 print("Using: $cmd\n");
 
 die unless(defined($cmd));
