@@ -15,8 +15,8 @@ from subprocess import call
 import pwd
 
 import argparse
-parser = argparse.ArgumentParser(prog='doc-dev', description='Python-Based Spell Checker')
-parser.add_argument('--port', type=int, default=-1, help='files to check')
+parser = argparse.ArgumentParser(prog='doc-dev', description='Python-Based Docker Launcher')
+parser.add_argument('--port', type=int, default=-1, help='port to bind to')
 parser.add_argument('--cmd', type=str, default="", help='files to check')
 parser.add_argument('image')
 pres=parser.parse_args(sys.argv[1:])
@@ -47,6 +47,7 @@ if not os.path.exists(bashrc):
     try:
         with open(bashrc,"w") as fd:
             print("""
+export SPACK_SKIP_MODULES=1
 if [ "" != "${SPACK_ROOT}" ]
 then
     source "$SPACK_ROOT/share/spack/setup-env.sh"
