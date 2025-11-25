@@ -73,7 +73,6 @@ def check_web(num : int,word : str,force : bool=False)->int:
     if disable_web:
         return 444
 
-    sleep(2)
     ret : int = 0
     res : Union[fake_res,requests.Response] = fake_res()
     if num == 1:
@@ -89,6 +88,7 @@ def check_web(num : int,word : str,force : bool=False)->int:
         pword = word.replace("'","%27")
         url = "https://www.thefreedictionary.com/%s" % pword
         try:
+            sleep(2)
             res = requests.get(url, timeout=tmout)
         except:
             ret = 404
@@ -98,6 +98,7 @@ def check_web(num : int,word : str,force : bool=False)->int:
     elif num == 4:
         nword = word.replace("'","")
         url = "https://www.collinsdictionary.com/us/dictionary/english/%s" % nword
+        sleep(2)
         res = requests.get(url, timeout=tmout)
         ret = 200
 
@@ -261,6 +262,8 @@ def f2(a : Tuple[str,int])->int:
 def suggest3(word:str)->List[Tuple[str,int]]:
     fl = word[0]
     ll = word[-1]
+    if ll == "'":
+        ll = ""
     sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
     result = cursor.execute(sql)
     scores : List[Tuple[str,int]] = []

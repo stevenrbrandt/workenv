@@ -21,6 +21,11 @@ if not found:
 
 with open(os.path.join(home,".bashaux"),"w") as fd:
     print("""
+if [ -d ~/venv ]
+then
+    source ~/venv/bin/activate
+fi
+
 set -o vi
 export PATH="{here}/bin:$HOME/bin:$PATH"
 if [ "$PYTHONUSERBASE" = "" ]
@@ -40,16 +45,12 @@ then
     export PYTHONPATH="$HOME/repos/workenv/py:$PYTHONPATH"
 fi
 
-if [ -d ~/venv ]
-then
-    source ~/venv/bin/activate
-fi
-
 alias vi=vim
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
-alias show-cursor='echo -en "\\x1b[?25h"'
+alias show-cursor='echo -en "\033[?25h"'
+#alias show-cursor='echo -en "\\x1b[?25h"'
 alias today='date +%m-%d-%Y'
 alias pip3='python3 -m pip'
 alias gitup='git pull --rebase origin'
@@ -58,11 +59,13 @@ function set-title() {{
   if [[ -z "$ORIG" ]]; then
     ORIG=$PS1
   fi
-  TITLE="\\[\x1b]2;$*\\a\\]"
+  TITLE="\\[\033]2;$*\\a\\]"
+  #TITLE="\\[\x1b]2;$*\\a\\]"
   PS1=${{ORIG}}${{TITLE}}
 }}
 
 #function set-title() {{
+#    printf "\033]2;$*\\a"
 #    printf "\x1b]2;$*\\a"
 #}}
 
@@ -100,9 +103,23 @@ unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
-shopt -s histappend                      # append to history, don't overwrite it
-export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
-export HISTSIZE=100000
+
+HISTCONTROL=ignoreboth
+
+# append to the history file, don't overwrite it
+shopt -s histappend
+
+# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
+export HISTSIZE=-1
+export HISTFILESIZE=-1
+
+# check the window size after each command and, if necessary,
+# update the values of LINES and COLUMNS.
+shopt -s checkwinsize
+
+# Find out more about prompt command
+#export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
+
 alias envup='(cd $(dirname $(dirname $(which mkrtf.pl))) ; git pull ; python3 ./install.py ) ; source ~/.bashrc'
 alias git-clear-passwd='git config --global credential.helper store'
 if [ "$SPACK_ROOT" != "" ]
@@ -282,6 +299,7 @@ if not os.path.exists(gitconf):
   whitespace = -trailing-space,-indent-with-non-tab,-tab-in-indent
     autocrlf = false
     safecrlf = false
+	fileMode = false
 [credential]
     helper = store
 [push]

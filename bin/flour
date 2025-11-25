@@ -1,0 +1,10 @@
+#!/bin/bash
+if [ -r "/home/sbrandt/LSUOneDrive/repos/FlourLang/build/libs/flouri.jar" ]
+then
+    JAR="/home/sbrandt/LSUOneDrive/repos/FlourLang/build/libs/flouri.jar"
+else
+    JAR="/home/sbrandt/repos/FlourLang/build/libs/flouri.jar"
+fi
+prog=$1
+shift
+java -jar $JAR $prog -- $*

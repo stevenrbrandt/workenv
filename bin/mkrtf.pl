@@ -159,6 +159,21 @@ sub setmode {
     $center_scene_brk = 1;
     ($marginl,$marginr,$margint,$marginb) = 
     (     1.0,     1.0,     1.0,     1.0);
+  } elsif($mode eq "develop") {
+    print "DEVELOP MODE ON\n";
+    $chapters_on = 1;
+    $italics_on = 1;
+    $spacing = 2;
+    $font_size = 12;
+    $font = "Times New Roman";
+    $notes_on = 1;
+    $bold_chapters = 0;
+    $chapter_lines=15;
+    $paperw = 8.5;
+    $paperh = 11.0;
+    $center_scene_brk = 1;
+    ($marginl,$marginr,$margint,$marginb) = 
+    (     1.0,     1.0,     1.0,     1.0);
   } elsif($mode eq "test") {
     print "TEST MODE ON\n";
     $chapters_on = 1;
@@ -329,7 +344,6 @@ sub setmode {
 
 die "bad font" unless (defined($fonts{$font}));
 
-my $fs = 2*$font_size;
 my $first_title = 1;
 my $wc=0;
 my $par=0;
@@ -432,6 +446,7 @@ print $fdw "{\\rtf1\\ansi\\deff0 {\\fonttbl \n";
 for my $fk (keys %fonts) {
     print $fdw "{\\f$fonts{$fk} ${fk};}\n";
 }
+my $fs = 2*$font_size;
 print $fdw "}\\fs$fs\n";
 print $fdw "{\\colortbl;\\red0\\green0\\blue0;\\red0\\green155\\blue0;\\red255\\green0\\blue0;}\n";
 printf $fdw "\\margl%d\\margr%d\\margt%d\\margb%d\\gutter%d ",$mll,$mlr,$mlt,$mlb,$gutter*1440.0+.5;
@@ -671,7 +686,7 @@ while(<$fdr>) {
     } elsif(/<(note|problem)="([^"]*)">/) {
         my $note=$2;
         if($notes_on) {
-            print "NOTE: $note\n";
+            print "  NOTE: $note\n";
             #print $fdw "{\\rtlch \\ltrch\\loch {\\*\\atnid }\\chatn{\\*\\annotation{\\*\\atnref 0}$note}}\n";
             print $fdw "{\\pard \\par}\n";
             print $fdw "{\\pard \\cf2 NOTE: $note \\par}\n";
