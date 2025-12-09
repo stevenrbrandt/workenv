@@ -45,6 +45,12 @@ then
     export PYTHONPATH="$HOME/repos/workenv/py:$PYTHONPATH"
 fi
 
+if [ -d ~/venv/ ]
+then
+    export PYTHON_HOME="$HOME/venv"
+    export PATH="$HOME/venv:$PATH"
+fi
+
 alias vi=vim
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
