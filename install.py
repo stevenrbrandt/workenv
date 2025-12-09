@@ -48,7 +48,12 @@ fi
 if [ -d ~/venv/ ]
 then
     export PYTHON_HOME="$HOME/venv"
-    export PATH="$HOME/venv:$PATH"
+    export PATH="$HOME/venv/bin:$PATH"
+fi
+
+if [ -d ~/workenv/bin ]
+then
+    export PATH="$HOME/workenv/bin:$PATH"
 fi
 
 alias vi=vim
@@ -110,18 +115,18 @@ export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
 
-HISTCONTROL=ignoreboth
+#HISTCONTROL=ignoreboth
 
 # append to the history file, don't overwrite it
 shopt -s histappend
 
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-export HISTSIZE=-1
-export HISTFILESIZE=-1
+#export HISTSIZE=-1
+#export HISTFILESIZE=-1
 
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
-shopt -s checkwinsize
+#shopt -s checkwinsize
 
 # Find out more about prompt command
 #export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
