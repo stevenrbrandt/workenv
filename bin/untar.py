@@ -2,6 +2,7 @@
 from typing import Set, Optional, Iterable, Callable, Final, Union, Dict
 from termcolor import colored as is_colored
 import tarfile
+import shutil
 import sys
 import os
 import re
@@ -94,8 +95,21 @@ def untar(file_tgz : str, require_common_dir:Union[str,bool]=False)->None:
         except FileNotFoundError as fnf:
             st = None
 
+        if st is not None and st.st_uid != os.getuid():
+            if os.path.isdir(m_name):
+                try:
+                    shutil.rmtree(m_name)
+                    print(colored("rmtree:","red"),m_name)
+                except PermissionError:
+                    print(colored("Permission Error:","red"), f"Please delete '{os.path.dirname(m_name)}' and try again")
+                    exit(15)
+            else:
+                print(colored("unlink:","red"),m_name)
+                r = os.unlink(m_name)
+            st = None
+
         # Does the file need updating?
-        if st is None or st.st_size != m.size or st.st_mode != m.mode:
+        if st is None or st.st_size != m.size or st.st_mode != m.mode or st.st_uid != os.getuid():
 
             # Attempt to extract the file
             try:
