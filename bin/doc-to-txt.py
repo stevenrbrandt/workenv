@@ -21,7 +21,8 @@ def fix(s):
     s = re.sub(r'”','"',s)
     s = re.sub(r'\s*–\s*','--',s)
     s = re.sub(r'\s*—\s*',"--",s)
-    s = re.sub(r'</i><i>',"",s)
+    s = re.sub(r'</i> *<i>',"",s)
+    s = re.sub(r'</b> *<b>',"",s)
     s = re.sub(r'<i> ',r' <i>',s)
     s = re.sub(r' </i>',r'</i> ',s)
     s = re.sub(r'^\s+','',s)
@@ -35,13 +36,19 @@ def save(content,file_name):
     #    p.stdin.write(content)
 
 def get_name(elem):
-    if elem == None:
+    if elem == None or not hasattr(elem, 'tag'):
         return ''
-    s = str(elem)
-    g = re.match(r".*}([\w:]+)('|$)",s)
-    if not g:
-        raise Exception(str(elem))
-    return g.group(1)
+    s = elem.tag
+    sc = re.sub(r'.*}','',s) # fix name to get rid of URL
+    if hasattr(elem, "attrib"):
+        for k in elem.attrib:
+            kc = re.sub(r'.*}','', k) # fix name to get rid of URL
+            if kc == "val":
+                #print(">>>",sc," -> ",elem.attrib[k],type(elem.attrib[k]),"<<<",sep="")
+                # False is encoded as the str "0"
+                if elem.attrib[k] == "0":
+                    return ''
+    return sc
 
 def get_attr(elem,name):
     if elem == None:
@@ -79,6 +86,7 @@ def do_elem(elem,ind='',quote=False):
         "bold":False,
         "center":False,
         "quote":quote,
+        "strike":False,
         "cid":[]
     }
     #print(ind,'<',show_elem(elem),'>',sep='')
@@ -98,6 +106,8 @@ def do_elem(elem,ind='',quote=False):
         props["italic"] = True
     elif name == "b":
         props["bold"] = True
+    elif name == "strike":
+        props["strike"] = True
     elif name == "jc" and get_attr(elem,"val") == "center":
         props["center"] = True
     elif name == "commentRangeStart":
@@ -114,7 +124,10 @@ def do_elem(elem,ind='',quote=False):
             props["text"] += elem.text
         else:
             props["text"] += elem.text.strip()
-    else:
+    elif name in ["document", "body"]:
+        for e in elem:
+            do_elem(e,ind+'  ',props["quote"])
+    else: #if name in ["pPr", "rPr", "rtl", "br"]:
         for e in elem:
             p = do_elem(e,ind+'  ',props["quote"])
             props["text"] += p["text"]
@@ -126,8 +139,14 @@ def do_elem(elem,ind='',quote=False):
                 props["center"] = True
             if p["quote"]:
                 props["quote"] = True
+            if p["strike"]:
+                props["strike"] = True
             for vs in p["cid"]:
                 props["cid"] += [vs]
+    #elif name in ["widowControl", "spacing", "rPr", "br", "bookmarkStart", "bookmarkEnd", "sdt", "sdtPr", "commentRangeEnd", "commentReference", "sectPr", "rFonts", "rtl", "iCs", "bCs"]:
+    #    pass
+    #else:
+    #    assert False, f"Tag: {elem.tag}"
     if name == "r":
         if props["italic"] and not props["quote"]:
             if props["text"].strip() == "Inside":
@@ -137,14 +156,15 @@ def do_elem(elem,ind='',quote=False):
             else:
                 props["text"] = props["text"]
             props["italic"] = False
-        elif props["bold"]:
+        if props["bold"]:
             if use_italics:
                 props["text"] = "<b>"+props["text"]+"</b>"
             else:
                 props["text"] = props["text"]
             props["bold"] = False
-        else:
-            pass #print(props["text"],end='')
+        if props["strike"]:
+            props["text"] = "<u>"+props["text"]+"</u>"
+            props["strike"] = False
     #print(ind,"</",show_elem(elem),'>',sep='')
     if name == "p":
         off = False
@@ -165,7 +185,7 @@ def do_elem(elem,ind='',quote=False):
                 if re.match(r'^\s*(<i>|)#(</i>|)\s*',txt):
                     print("\n<scene>",end='')
                 else:
-                    print("\n<chapter=\"%s\">" % txt,end='')
+                    print("\n<chapter=\"%s\">" % re.sub(r'<\/?b>','',txt),end='')
         elif re.match(r'^\s*#\s*',txt):
             print("\n<scene>",end='')
         else:

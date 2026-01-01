@@ -277,6 +277,15 @@ def suggest3(word:str)->List[Tuple[str,int]]:
         if len(scores) > 15:
             scores = sorted(scores,key=f2)
             scores = scores[0:10]
+    if pres.locals:
+        with open("locals.txt","r") as fd:
+            for line in fd.readlines():
+                potential = line.strip()
+                s = score(potential, word)
+                scores += [(potential, s)]
+                if len(scores) > 15:
+                    scores = sorted(scores,key=f2)
+                    scores = scores[0:10]
     return scores
 
 suggest_cache : Dict[bool,Dict[str,str]] = {True:{}, False:{}}
@@ -289,8 +298,8 @@ def suggest(word:str,use3:bool=True)->str:
     w = re.sub(r"['\s]","",w)
     if len(w) <= 1:
         return "?"
-    fl = w[0]
-    ll = w[-1]
+    #fl = w[0]
+    #ll = w[-1]
     #if use3:
     #    result = cursor.execute("SELECT word FROM words WHERE code >= 200 and code < 300")
     #else:
@@ -310,11 +319,11 @@ def do_text(text:str, fname:str)->str:
     # Remove enclosing single quotes
     text = re.sub(r"`([^']*)'",r'\1',text)
     # Remove enclosing single quotes
-    text = re.sub(r"\w+='([^']*)'",r'\1',text)
+    text = re.sub(r"\w+=(?<=[\s\.,\?])'([^']*)'(?=[\s\.,\?])",r'\1',text)
 
     pos = 0
     s = ""
-    for w in re.finditer(r"(\\?[\w'’]+)",text):
+    for w in re.finditer(r"((?:[^\W\d_]|')+)",text):
         if pres.vdiff:
             s += text[pos:w.start()]
         pos = w.end()
