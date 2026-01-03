@@ -5,11 +5,27 @@ import subprocess as s
 
 import xml.etree.ElementTree as ET
 
+verbose = False
 use_italics = True
 last_was_tag = False
 
 lastP = False
 comments = {}
+
+def is_last(iterable):
+    it = iter(iterable)
+    try:
+        e = next(it)
+        while True:
+            try:
+                nxt = next(it)
+                yield (False, e)
+                e = nxt
+            except StopIteration:
+                yield (True, e)
+                break
+    except StopIteration:
+        pass # Handles empty iterators
 
 def nz(x):
     return not(x is None or x == 0)
@@ -21,13 +37,23 @@ def fix(s):
     s = re.sub(r'”','"',s)
     s = re.sub(r'\s*–\s*','--',s)
     s = re.sub(r'\s*—\s*',"--",s)
-    s = re.sub(r'</i> *<i>',"",s)
-    s = re.sub(r'</b> *<b>',"",s)
+    s = re.sub(r'</i>\s*<i>',"",s)
+    s = re.sub(r'<i>\s*</i>',"",s)
+    s = re.sub(r'</b>\s*<b>',"",s)
+    s = re.sub(r'<b>\s*</b>',"",s)
     s = re.sub(r'<i> ',r' <i>',s)
     s = re.sub(r' </i>',r'</i> ',s)
-    s = re.sub(r'^\s+','',s)
-    s = re.sub(r'\s+$','',s)
+    #s = re.sub(r'^\s+','',s)
+    #s = re.sub(r'\s+$','',s)
     return s
+
+def dump(fd, elem, ind=0):
+    name = re.sub(r'.*}','',elem.tag)
+    print(" "*ind, name, sep='', file=fd)
+    for elem2 in elem:
+        dump(fd, elem2, ind+2)
+    if name == "t":
+        print(" "*(ind+2),elem.text,file=fd)
 
 def save(content,file_name):
     pass
@@ -36,25 +62,27 @@ def save(content,file_name):
     #    p.stdin.write(content)
 
 def get_name(elem):
-    if elem == None or not hasattr(elem, 'tag'):
+    if elem == None:
         return ''
+    if type(elem) == str:
+        return re.sub(r'.*}','',elem)
     s = elem.tag
     sc = re.sub(r'.*}','',s) # fix name to get rid of URL
-    if hasattr(elem, "attrib"):
-        for k in elem.attrib:
-            kc = re.sub(r'.*}','', k) # fix name to get rid of URL
-            if kc == "val":
-                #print(">>>",sc," -> ",elem.attrib[k],type(elem.attrib[k]),"<<<",sep="")
-                # False is encoded as the str "0"
-                if elem.attrib[k] == "0":
-                    return ''
+    #if hasattr(elem, "attrib"):
+    #    for k in elem.attrib:
+    #        kc = re.sub(r'.*}','', k) # fix name to get rid of URL
+    #        if kc == "val":
+    #            # False is encoded as the str "0"
+    #            if sc in ["strike","italic","bold"] and elem.attrib[k] == "0":
+    #                return ''
     return sc
 
 def get_attr(elem,name):
     if elem == None:
         return None
     for k in elem.attrib:
-        if get_name(k) == name:
+        ks = re.sub(r'.*}','',k)
+        if ks == name:
             return elem.attrib[k]
     return None
 
@@ -78,141 +106,145 @@ def fmt_attr(elem):
 def show_elem(elem):
     return get_name(elem)+fmt_attr(elem)
 
-def do_elem(elem,ind='',quote=False):
-    global lastP, last_was_tag
-    props = {
-        "text":"",
-        "italic":False,
-        "bold":False,
-        "center":False,
-        "quote":quote,
-        "strike":False,
-        "cid":[]
-    }
-    #print(ind,'<',show_elem(elem),'>',sep='')
+def get_text(elem):
+    text = ""
     name = get_name(elem)
-    if name == 'p':
-        props["quote"]=False
-    if name == "del":
+    if name == "t":
+        if elem.text is not None:
+            text += elem.text
+    else:
+        for elem2 in elem:
+            text += get_text(elem2)
+    return text
+
+def get_props(elem, props=None, trace=False):
+    if props is None:
+        props = {
+            "italic":False,
+            "bold":False,
+            "center":False,
+            "strike":False,
+            "quote":False,
+            "pStyle":"text",
+            "ind":None,
+            "cid":[]
+        }
+    if elem is None:
         return props
-    if name == "ind":
-        if not props["quote"] and nz(get_attr(elem,"right")):
-            if not lastP:
-                if use_italics:
-                    print("<quote>",end="")
-            lastP = True
-            props["quote"] = True
-    elif name == "i":
-        props["italic"] = True
-    elif name == "b":
-        props["bold"] = True
-    elif name == "strike":
-        props["strike"] = True
-    elif name == "jc" and get_attr(elem,"val") == "center":
-        props["center"] = True
-    elif name == "commentRangeStart":
-        props["cid"] += [get_attr(elem,"id")]
-    elif name == "t":
-        #print("<",show_elem(elem),":",show_elem(h),":",show_elem(h2),">: {",elem.text,"}",sep='')
-        #print(ind,"{",elem.text,"}",sep='')
-        preserve = False
-        for k in elem.attrib:
-            if get_name(k) == "space" and elem.attrib[k] == "preserve":
-                preserve = True
-                break
-        if preserve:
-            props["text"] += elem.text
+    for elem2 in elem:
+        name = get_name(elem2)
+        val = get_attr(elem2, "val")
+        if trace:
+            print(">>",name,val)
+        if name == "i":
+            props["italic"] = val != "0"
+        elif name == "b":
+            props["bold"] = val != "0"
+        elif name == "strike":
+            props["strike"] = val != 0
+        elif name == "pStyle":
+            props["pStyle"] = val
+        elif name == "jc" and get_attr(elem2,"val") == "center":
+            props["center"] = True
+        elif name == "commentRangeStart":
+            props["cid"] += [get_attr(elem2,"id")]
+        elif name == "ind":
+            left = get_attr(elem2, "left")
+            right = get_attr(elem2, "right")
+            props["ind"] = (left, right)
+            props["quote"] = left not in [0, None] and right not in [0, None]
+
+        #if elem2.text is None:
+        #    props["text"] = ""
+        #elif get_attr(elem2, "space") == "preserve":
+        #    props["text"] = elem2.text
+        #else:
+        #    props["text"] = elem2.text.strip()
+
+        get_props(elem2, props, trace)
+
+    return props
+
+def do_elem(elem,props=None,last_elem=False):
+    global lastP, last_was_tag, verbose
+    name = get_name(elem)
+    if name == "del":
+        return ""
+    elif name == "r":
+        if props is not None:
+            props1 = props
         else:
-            props["text"] += elem.text.strip()
-    elif name in ["document", "body"]:
-        for e in elem:
-            do_elem(e,ind+'  ',props["quote"])
-    else: #if name in ["pPr", "rPr", "rtl", "br"]:
-        for e in elem:
-            p = do_elem(e,ind+'  ',props["quote"])
-            props["text"] += p["text"]
-            if p["italic"]:
-                props["italic"] = True
-            if p["bold"]:
-                props["bold"] = True
-            if p["center"]:
-                props["center"] = True
-            if p["quote"]:
-                props["quote"] = True
-            if p["strike"]:
-                props["strike"] = True
-            for vs in p["cid"]:
-                props["cid"] += [vs]
-    #elif name in ["widowControl", "spacing", "rPr", "br", "bookmarkStart", "bookmarkEnd", "sdt", "sdtPr", "commentRangeEnd", "commentReference", "sectPr", "rFonts", "rtl", "iCs", "bCs"]:
-    #    pass
-    #else:
-    #    assert False, f"Tag: {elem.tag}"
-    if name == "r":
-        if props["italic"] and not props["quote"]:
-            if props["text"].strip() == "Inside":
-                print(props,file=sys.stderr)
-            if use_italics:
-                props["text"] = "<i>"+props["text"]+"</i>"
-            else:
-                props["text"] = props["text"]
-            props["italic"] = False
-        if props["bold"]:
-            if use_italics:
-                props["text"] = "<b>"+props["text"]+"</b>"
-            else:
-                props["text"] = props["text"]
-            props["bold"] = False
-        if props["strike"]:
-            props["text"] = "<u>"+props["text"]+"</u>"
-            props["strike"] = False
-    #print(ind,"</",show_elem(elem),'>',sep='')
-    if name == "p":
+            props1 = get_props(None)
+        props2 = get_props(elem)
+        props2["text"] = get_text(elem)
+        if props2["italic"] and not props1["quote"]:
+            if props2["text"] != "":
+                props2["text"] = "<i>"+props2["text"]+"</i>"
+        if props2["bold"]:
+            if props2["text"] != "":
+                props2["text"] = "<b>"+props2["text"]+"</b>"
+        if props2["strike"]:
+            if props2["text"] != "":
+                props2["text"] = "<u>"+props2["text"]+"</u>"
+        return props2["text"]
+    elif name == "p":
         off = False
-        if lastP and not props["quote"]:
+        props2 = get_props(elem)
+        props2["text"] = get_text(elem)
+        is_tag = True
+        if not lastP and props2["quote"]:
+            print("<quote>")
+        if lastP and not props2["quote"]:
             if use_italics:
                 print("</quote>")
             off = True
-            lastP = False
-        txt = props["text"].strip()
-        if txt=='':
-            return props
-        if props["center"] and not props["quote"]:
-            #print("<p style='text-align: center'>",end='')
-            if re.match(r"^\s*\*\s*\*\s*\*\s*$",txt) or re.match(r'^\s*#\s*',txt):
-                print("\n<scene>",end='')
+        lastP = props2["quote"]
+        txt = props2["text"]
+        if props2["pStyle"] == "Heading1":
+            print(f'<title="{fix(txt.strip())}">')
+        elif props2["pStyle"] == "Heading2":
+            txt = fix(re.sub(r'^Chapter.*?:\s*','',txt).strip())
+            if len(txt) > 0:
+                print(f'<chapter="{txt.strip()}">')
+        elif props2["pStyle"] == "Heading3":
+            txt = fix(re.sub(r'^Scene.*?:\s*','',txt).strip())
+            if txt in ["#","***","###"]:
+                print("<scene>")
             else:
-                txt = re.sub(r'Chapter\s+\d+:?\s*','',txt)
-                if re.match(r'^\s*(<i>|)#(</i>|)\s*',txt):
-                    print("\n<scene>",end='')
+                print(f'<scene="{txt}">')
+        elif props2["center"] and not props2["quote"]:
+            if re.match(r"^\s*\*\s*\*\s*\*\s*$",txt) or re.match(r'^\s*#\s*',txt):
+                print("<scene>")
+            else:
+                txt = fix(re.sub(r'Chapter\s+\d+:?\s*','',txt).strip())
+                if len(txt) == 0:
+                    pass
+                elif re.match(r'^\s*(<i>|)#(</i>|)\s*',txt):
+                    print("<scene>")
                 else:
-                    print("\n<chapter=\"%s\">" % re.sub(r'<\/?b>','',txt),end='')
+                    print("<chapter=\"%s\">" % re.sub(r'<\/?b>','',txt))
         elif re.match(r'^\s*#\s*',txt):
-            print("\n<scene>",end='')
+            print("<scene>")
         else:
-            #print("<p>",end='')
-            is_tag = re.search(r'>\s*$',txt) is not None
-            if is_tag and re.search(r'</[ib]>\s*$',txt):
-                is_tag = False
-            if (not last_was_tag) or (not is_tag):
-                #if is_tag:
-                #    print(end='[1]')
-                #if last_was_tag:
-                #    print(end='[2]')
+            is_tag = False
+            new_txt = ""
+            for last,elem2 in is_last(elem):
+                new_txt += do_elem(elem2,props2,last)
+            new_txt = fix(new_txt.strip())
+            if len(new_txt) > 0:
+                print(new_txt)
+                for vs in props2["cid"]:
+                    if vs in comments:
+                        print('#',comments[vs].strip(),end='')
                 print()
-            print(fix(txt.strip()),end='')
-            last_was_tag = is_tag
-            #else:
-            #    print()
-            #print("</p>")
-        for vs in props["cid"]:
-            if vs in comments:
-                print('\n#',fix(comments[vs].strip()),end='')
-        print()
-        props["text"] = ''
-        props["center"] = False
-        lastP = props["quote"]
-        props["quote"] = False
-    return props
+        if is_tag:
+            print()
+    else:
+        new_text = ""
+        for elem2 in elem:
+            new_text += do_elem(elem2)
+        return new_text
+    return ""
 
 def get_comments(tree,id='?',author=None):
     global comments
@@ -251,7 +283,7 @@ def get_docx_text(path):
     tree = ET.fromstring(xml_content)
     #print(tree)
     #print(dir(tree))
-    do_elem(tree,quote=False)
+    do_elem(tree)
 
 import sys
 
