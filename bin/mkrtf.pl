@@ -587,7 +587,7 @@ while(<$fdr>) {
         }
         #my $indent = 720;
         if($flags =~ /\bindent=(\d+(\.\d+)?)/) {
-            die "Don't do this.";
+            die "Don't do this. $.";
             $indent = int(1440.0*$1);
             print("Re-indent=$indent\n");
         }

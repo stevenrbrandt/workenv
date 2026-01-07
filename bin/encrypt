@@ -1,6 +1,9 @@
-if [[ /tmp/todo.txt -nt ~/LSUOneDrive/todo.txt.gpg ]]
+mkdir -p $HOME/tmp
+TXT=$HOME/tmp/todo.txt
+GPG=$HOME/writing-git/todo.txt.gpg
+if [[ $TXT -nt $GPG ]]
 then
-    gpg -o ~/LSUOneDrive/todo.txt.gpg -c /tmp/todo.txt
+    gpg -o $GPG -c $TXT
 else
     echo already encrypted
 fi

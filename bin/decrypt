@@ -1,9 +1,12 @@
-#if [[ ~/LSUOneDrive/todo.txt.gpg -nt /tmp/todo.txt ]]
-#then
-    touch /tmp/todo.txt
-    cp /tmp/todo.txt /tmp/todo-sav.txt
-    gpg -o /tmp/todo.txt -d ~/LSUOneDrive/todo.txt.gpg
-    vimdiff /tmp/todo.txt /tmp/todo-sav.txt
-#else
-#    echo already decrypted
-#fi
+mkdir -p $HOME/tmp
+TXT=$HOME/tmp/todo.txt
+GPG=$HOME/writing-git/todo.txt.gpg
+if [[ ~/LSUOneDrive/todo.txt.gpg -nt /tmp/todo.txt ]]
+then
+    touch $TXT
+    cp $TXT{,.sav} 
+    gpg -o $TXT -d $GPG
+    vimdiff $TXT{,.sav}
+else
+    echo already decrypted
+fi

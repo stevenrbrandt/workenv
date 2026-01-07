@@ -17,7 +17,7 @@ dstf = ".".join(dst)
 dst[-1] = "ppm"
 ppmf = ".".join(dst)
 print("dst:",dstf)
-call(["convert",srcf,"-compress","none",ppmf])
+call(["magick",srcf,"-compress","none",ppmf])
 with open(ppmf,"r") as fd:
     for line in  fd.readlines():
         data += [re.split(r'\s+', line.strip())]
