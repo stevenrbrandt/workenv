@@ -115,14 +115,14 @@ export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
 export VISUAL=vi
 
-#HISTCONTROL=ignoreboth
+export HISTCONTROL=erasedups
 
 # append to the history file, don't overwrite it
 shopt -s histappend
 
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-#export HISTSIZE=-1
-#export HISTFILESIZE=-1
+export HISTSIZE=10000
+export HISTFILESIZE=20000
 
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
