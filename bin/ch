@@ -9,7 +9,6 @@ my %bookmarks = (
     "gitter"=>["https://gitter.im/EinsteinToolkit/EinsteinToolkit"],
     "tests"=>["http://einsteintoolkit.org/testsuite_results/index.php"],
     "carpetx"=>["https://bitbucket.org/eschnett/cactusamrex/wiki/To%20Do%20List"],
-    "printer"=>["http://10.20.106.20/"],
     "book"=>["https://docs.google.com/document/d/1m9JrzgEkme9f3dtKI4xVZGeuUDtv50J2r-m_ZKB3L1Q/edit"],
     "git-token" => ["https://github.com/settings/tokens"],
     "ccano" => ["https://lsu.zoom.us/j/587215096"],
@@ -26,7 +25,6 @@ my %bookmarks = (
     "leave" => ["https://tiger02.apps.lsu.edu/certification_application/leave_certification/"],
     "td" => ["https://client.schwab.com/Login/SignOn/CustomerCenterLogin.aspx"],
     "beo" => ["http://localhost/cios/index.php/python/index.xml"],
-    "heorot" => ["http://localhost/cios/index.php/python/heorot.xml"],
     "target" => ["https://rcam.target.com/"],
     "bank" => ["https://myaccounts.capitalone.com/"],
     "ch" => ["http://chromecast.com/setup"],
@@ -39,18 +37,6 @@ my %bookmarks = (
     "chess" => ["http://www.chess.com/play/computer"],
     "d" => ["https://drive.google.com/?authuser=0#my-drive","Google Docs"],
     "u" => ["http://youtube.com","YouTube"],
-    "bookreview1" => [
-        "http://blbooks.blogspot.com/p/review-policy.html",
-        "Book Review 1"],
-    "story" => [
-        "http://thestorycenter.com/tsc/tabid/68/g/topics/f/5/The-Pirates-of-Literature.aspx",
-        "The Story Center"],
-    "ptpdocs" => [
-        "http://help.eclipse.org/juno/index.jsp",
-        "PTP Docs"],
-    "syn" => [
-        "http://help.eclipse.org/juno/index.jsp?topic=%2Forg.eclipse.platform.doc.isv%2Fguide%2Feditors_highlighting.htm",
-        "Syntax Eclilpse"],
     "jaxb" => [
         "http://eclipse.org/ptp/schemas/rm.xsd",
         "JAXB"],
@@ -60,36 +46,12 @@ my %bookmarks = (
     "images" => [
         "http://images.google.com",
         "Images"],
-    "git" => [
-        "http://git.or.cz/course/svn.html",
-        "Git crash course"],
-    "shift/red" => [
-        "http://en.wikipedia.org/wiki/Shift-reduce_parser",
-        "Shift/Reduce"],
-    "shorts" => [
-        "http://www.shortstravel.com/lsu/",
-        "Shorts"],
-    "mm" => [
-        "http://calendar.cct.lsu.edu/meetingmaker/",
-        "Meeting Maker"],
-    "eager" => [
-        "http://www.nsf.gov/pubs/policydocs/papp/gpg_2.jsp#IID2",
-        "EAGER proposal" ],
-    "wiki" => [
-        "http://wiki.cct.lsu.edu",
-        "Wikis"],
     "svn" => [
         "https://svn.cct.lsu.edu/repos",
         "SVN"],
-    "laptop" => [
-        "http://www.bestbuy.com/site/Samsung+-+15.6%26%2334%3B+Laptop+-+4GB+Memory+-+500GB+Hard+Drive+-+Silver/5862633.p?id=1218700167905&skuId=5862633",
-        "Candidate Laptop"],
     "seq" => [
         "http://www.cs.nmsu.edu/~pfeiffer/classes/573/notes/consistency.html",
         "Sequential Consistency vs. strict consistency"],
-    "goog" => [
-        "http://google.com",
-        "Google"],
     "fb" => [
         "http://facebook.com",
         "Facebook"],
@@ -102,37 +64,31 @@ my %bookmarks = (
     "cal" => [
         "http://www.google.com/calendar",
         "My Calendar"],
-    "pubcal" => [
-        "https://www.google.com/calendar/embed?src=steven.brandt%40gmail.com&ctz=America/Chicago",
-        "My Public Calendar"],
     "rd" => [
         "http://www.feedly.com/home#latest",
-        "Google Reader"],
+        "Feedly Reader"],
     "ult" => [
         "http://dl.acm.org/citation.cfm?id=949336&bnc=1",
         "Ulterior Reference Counting"],
-    "refc" => [
-        "http://www.research.ibm.com/people/d/dfb/papers/Bacon01Concurrent.pdf",
-        "Cycle Collection in Ref Counted Systems"],
-    "stars" => [
-        "http://www.naic.edu/~gibson/starnames/starnames.html",
-        "Star Names"],
-    "funwave" => [
-        "http://chinacat.coastal.udel.edu/programs/funwave/funwave.html",
-        "Funwave Homepage"],
-    "csc7700" => [
-        "https://wiki.cct.lsu.edu/sci-comp-2012/Main_Page",
-        "Scientific Programming"],
-    "csc4700" => [
-        "http://csc.lsu.edu/csc4700mps/",
-        "Multiprocessor Systems"],
-    "volatile" => [
-        "http://www.cs.umd.edu/~pugh/java/memoryModel/jsr-133-faq.html#volatile",
-        "VolatileExample from Herlihy"],
     "srb" => [
         "http://stevenrbrandt.com",
         "Home"],
 );
+
+open(my $fh, ">", "bookmarks.html") or die;
+print $fh "<ol>\n";
+for my $k (keys %bookmarks) {
+    my @val = @{$bookmarks{$k}};
+    print $fh "<li><strong>$k:</strong> \n";
+    if($#val == 1) {
+        print $fh "<a target='external' href='$val[0]'>$val[1]</a>\n";
+    } else {
+        print $fh "<a target='external' href='$val[0]'>$val[0]</a>\n";
+    }
+    print $fh "</li>\n";
+}
+print $fh "<ol>\n";
+close($fh);
 
 sub file {
   my $file = shift;
@@ -208,7 +164,7 @@ if($#ARGV < 0) {
     usage();
 } else {
     print "cmd=$cmd\n";
-    system("$cmd 2>&1 1>/tmp/google.log &");
+    #system("$cmd 2>&1 1>/tmp/google.log &");
 }
 
 sub usage {
