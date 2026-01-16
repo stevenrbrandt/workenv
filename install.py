@@ -116,6 +116,7 @@ export LANG=en_US.UTF-8
 export VISUAL=vi
 
 export HISTCONTROL=erasedups
+export HISTIGNORE="cd:pwd:ls:exit:clear:history*:#*"
 
 # append to the history file, don't overwrite it
 shopt -s histappend
