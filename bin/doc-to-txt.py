@@ -135,9 +135,11 @@ def get_props(elem, props=None, trace=False):
         name = get_name(elem2)
         val = get_attr(elem2, "val")
         if trace:
-            print(">>",name,val)
+            print(">>",name,val, file=sys.stderr)
         if name == "i":
             props["italic"] = val != "0"
+        elif name == "rStyle" and val == "Emphasis":
+            props["italic"] = True
         elif name == "b":
             props["bold"] = val != "0"
         elif name == "strike":
