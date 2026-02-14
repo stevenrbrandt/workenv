@@ -57,6 +57,8 @@ then
 fi
 
 alias vi=vim
+alias unify="spack config add concretizer:unify:true"
+alias reuse="spack config add concretizer:reuse:true"
 alias vdiff="vimdiff -c 'set wrap' -c 'wincmd w' -c 'set wrap'"
 alias twait='fg && trun -n echo success || trun -n echo failure'
 alias spack-load='source spack-load.sh'
@@ -113,7 +115,7 @@ alias ps1bw='PS1=$PS1_BW'
 unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
 export LANG=en_US.UTF-8
-export VISUAL=vi
+export VISUAL="$(which vim)"
 
 export HISTCONTROL=erasedups
 export HISTIGNORE="cd:pwd:ls:exit:clear:history*:#*"
@@ -161,6 +163,10 @@ if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif
 endif
 set ambw=double 
+" Enable inline character-level diffs only if supported
+if exists('+diffopt') && (has("patch-9.1.1243") || has("nvim-0.12"))
+    set diffopt+=inline:char
+endif
 """.format(here=here),file=fd)
 
 vim_dir = os.path.join(home, ".vim", "colors")
