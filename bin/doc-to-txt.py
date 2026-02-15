@@ -135,15 +135,19 @@ def get_props(elem, props=None, trace=False):
         name = get_name(elem2)
         val = get_attr(elem2, "val")
         if trace:
-            print(">>",name,val, file=sys.stderr)
+            print(">>[",name ,"][",val,"]",sep="",file=sys.stderr)
         if name == "i":
+            props["italic"] = val != "0"
+        elif name == "iCs":
+            if trace:
+                print("ICS FOUND", val, file=sys.stderr)
             props["italic"] = val != "0"
         elif name == "rStyle" and val == "Emphasis":
             props["italic"] = True
         elif name == "b":
             props["bold"] = val != "0"
         elif name == "strike":
-            props["strike"] = val != 0
+            props["strike"] = val != "0"
         elif name == "pStyle":
             props["pStyle"] = val
         elif name == "jc" and get_attr(elem2,"val") == "center":
@@ -179,7 +183,7 @@ def do_elem(elem,props=None,last_elem=False):
             props1 = get_props(None)
         props2 = get_props(elem)
         props2["text"] = get_text(elem)
-        if props2["italic"] and not props1["quote"]:
+        if props2["italic"] and not props1["quote"] and not props1["italic"]:
             if props2["text"] != "":
                 props2["text"] = "<i>"+props2["text"]+"</i>"
         if props2["bold"]:
@@ -230,8 +234,15 @@ def do_elem(elem,props=None,last_elem=False):
         else:
             is_tag = False
             new_txt = ""
+            if props2["italic"]:
+                new_txt += "<i>"
+            p2 = props2["italic"]
             for last,elem2 in is_last(elem):
-                new_txt += do_elem(elem2,props2,last)
+                run_text = do_elem(elem2, props=props2, last_elem=last)
+                assert props2["italic"] == p2
+                new_txt += run_text
+            if props2["italic"]:
+                new_txt += "</i>"
             new_txt = fix(new_txt.strip())
             if len(new_txt) > 0:
                 print(new_txt)
