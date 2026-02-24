@@ -160,43 +160,67 @@ def get_props(elem, props=None, trace=False):
             props["ind"] = (left, right)
             props["quote"] = left not in [0, None] and right not in [0, None]
 
-        #if elem2.text is None:
-        #    props["text"] = ""
-        #elif get_attr(elem2, "space") == "preserve":
-        #    props["text"] = elem2.text
-        #else:
-        #    props["text"] = elem2.text.strip()
-
         get_props(elem2, props, trace)
 
     return props
+
+def adorn(text, props1, props2):
+    if text is None or text.strip()=="":
+        return ""
+
+    if not props1["italic"] and props2["italic"]:
+        text = "<i>"+text+"</i>"
+    elif props1["italic"] and not props2["italic"]:
+        text = "</i>"+text+"<i>"
+
+    if not props1["bold"] and props2["bold"]:
+        text = "<b>"+text+"</b>"
+    elif props1["bold"] and not props2["bold"]:
+        text = "</b>"+text+"<b>"
+
+    if not props1["strike"] and props2["strike"]:
+        text = "<u>"+text+"<u>"
+    elif props1["strike"] and not props2["strike"]:
+        text = "</u>"+text+"<u>"
+
+    return text
 
 def do_elem(elem,props=None,last_elem=False):
     global lastP, last_was_tag, verbose
     name = get_name(elem)
     if name == "del":
         return ""
+    elif name == "t":
+        text = elem.text
+        text = re.sub(r'“','"', text)
+        text = re.sub(r'”','"', text)
+        text = re.sub(r"’","'", text)
+        text = re.sub(r"…","...", text)
+        return text
     elif name == "r":
         if props is not None:
             props1 = props
         else:
             props1 = get_props(None)
         props2 = get_props(elem)
-        props2["text"] = get_text(elem)
-        if props2["italic"] and not props1["quote"] and not props1["italic"]:
-            if props2["text"] != "":
-                props2["text"] = "<i>"+props2["text"]+"</i>"
-        if props2["bold"]:
-            if props2["text"] != "":
-                props2["text"] = "<b>"+props2["text"]+"</b>"
-        if props2["strike"]:
-            if props2["text"] != "":
-                props2["text"] = "<u>"+props2["text"]+"</u>"
+        ###
+        props2["text"] = ""
+        for elem2 in elem:
+            props2["text"] += adorn(do_elem(elem2, props2), props1, props2)
+        ###
         return props2["text"]
     elif name == "p":
-        off = False
+        if props is not None:
+            props1 = props
+        else:
+            props1 = get_props(None)
         props2 = get_props(elem)
-        props2["text"] = get_text(elem)
+        ###
+        props2["text"] = ""
+        for elem2 in elem:
+            props2["text"] += adorn(do_elem(elem2, props2), props1, props2)
+        ###
+        off = False
         is_tag = True
         if not lastP and props2["quote"]:
             print("<quote>")
@@ -232,32 +256,13 @@ def do_elem(elem,props=None,last_elem=False):
         elif re.match(r'^\s*#\s*',txt):
             print("<scene>")
         else:
-            is_tag = False
-            new_txt = ""
-            if props2["italic"]:
-                new_txt += "<i>"
-            p2 = props2["italic"]
-            for last,elem2 in is_last(elem):
-                run_text = do_elem(elem2, props=props2, last_elem=last)
-                assert props2["italic"] == p2
-                new_txt += run_text
-            if props2["italic"]:
-                new_txt += "</i>"
-            new_txt = fix(new_txt.strip())
-            if len(new_txt) > 0:
-                print(new_txt)
-                for vs in props2["cid"]:
-                    if vs in comments:
-                        print('#',comments[vs].strip(),end='')
-                print()
-        if is_tag:
-            print()
-    else:
-        new_text = ""
+            print(fix(props2["text"]))
+        print()
+    elif name in ["document", "body"]:
         for elem2 in elem:
-            new_text += do_elem(elem2)
-        return new_text
-    return ""
+            do_elem(elem2)
+    else:
+        pass #print("NAME:",name)
 
 def get_comments(tree,id='?',author=None):
     global comments

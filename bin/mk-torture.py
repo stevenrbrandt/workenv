@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os, sys, re
 from pathlib import Path
 
@@ -342,7 +343,9 @@ if os.path.exists(vim_dir):
                 elif g:= re.match(r'^hi!\s+link\s+(\w+)\s+(\w+)', line):
                     symbols.add(g.group(1))
                     symbols.add(g.group(2))
-symbols.remove("clear")
+if "clear" in symbols:
+    symbols.remove("clear")
+symbols.add("Normal")
 
 from random import randint
 
