@@ -157,7 +157,7 @@ if not os.path.exists(vimrc):
     with open(vimrc,"w") as fd:
         print("""
 set ai nu ic sw=4 ts=4 expandtab hlsearch linebreak
-colorscheme torture
+"colorscheme torture
 syn on
 if has("autocmd")
   au BufReadPost * if line("'\\"") > 0 && line("'\\"") <= line("$") | exe "normal! g`\\"" | endif
@@ -166,7 +166,19 @@ set ambw=double
 " Enable inline character-level diffs only if supported
 if exists('+diffopt') && (has("patch-9.1.1243") || has("nvim-0.12"))
     set diffopt+=inline:char
+    call plug#begin()
+    Plug 'neoclide/coc.nvim', {{'branch': 'release'}}
+    call plug#end()
+    " Go to definition
+    nmap <silent> gd <Plug>(coc-definition)
+    " Go to type definition (useful for classes/templates)
+    nmap <silent> gy <Plug>(coc-type-definition)
+    " Go to implementation
+    nmap <silent> gi <Plug>(coc-implementation)
+    " Find references
+    nmap <silent> gr <Plug>(coc-references)
 endif
+colorscheme rand
 """.format(here=here),file=fd)
 
 vim_dir = os.path.join(home, ".vim", "colors")
