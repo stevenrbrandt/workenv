@@ -365,6 +365,9 @@ with open(scheme, "w") as fd:
             fg_gui = "#ffffff"
             bg_cterm = 16
             bg_gui = "#ffffff"
+        elif "Diff" in symbol or "Search" in symbol:
+            fg_cterm, bg_cterm = bg_cterm, fg_cterm
+            fg_gui, bg_gui = bg_gui, fg_gui
         print(f"""
 hi {symbol} guifg={fg_gui} guibg={bg_gui}
 hi {symbol} ctermfg={fg_cterm} ctermbg={bg_cterm}
