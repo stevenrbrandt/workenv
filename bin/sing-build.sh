@@ -10,7 +10,8 @@ then
 else
     src=$2
 fi
+export GODEBUG=http2client=0
 set -x
-trun srun -p gpu -A $ACCOUNT -n 1 --cpus-per-task 24 singularity build -F /work/sbrandt/images/$simg.simg docker://stevenrbrandt/$src
+trun srun -p gpu2 -A $ACCOUNT --tasks 1 --cpus-per-task 24 singularity build -F /work/sbrandt/images/$simg.simg docker://stevenrbrandt/$src
 chgrp singularity /work/sbrandt/images/$1.simg
 hostname
