@@ -178,12 +178,17 @@ if exists('+diffopt') && (has("patch-9.1.1243") || has("nvim-0.12"))
     " Find references
     nmap <silent> gr <Plug>(coc-references)
 endif
-colorscheme rand
+colorscheme LecturedInjury
 """.format(here=here),file=fd)
 
 vim_dir = os.path.join(home, ".vim", "colors")
 if not os.path.exists(vim_dir):
     os.makedirs(vim_dir)
+LecturedInjury = os.path.join(vim_dir, "LecturedInjury.vim")
+with open("vim/colors/LecturedInjury.vim") as fdr:
+    with open(os.path.join(vim_dir), "LecturedInjury.vim") as fdw:
+        fdw.write(fdr.read())
+
 torture = os.path.join(vim_dir, "torture.vim")
 
 if not os.path.exists(torture):
