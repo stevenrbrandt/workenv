@@ -2,6 +2,8 @@
 import os, sys, re
 from pathlib import Path
 
+import argparse
+
 header="""
 " Vim color file
 " Maintainer:   Your name <youremail@something.com>

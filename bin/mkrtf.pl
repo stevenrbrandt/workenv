@@ -946,6 +946,7 @@ sub accent {
   $txt =~ s/\^\^/\\par}{\\pard    /g;
   $txt =~ s/“/"/g;
   $txt =~ s/”/"/g;
+  $txt =~ s/—/--/g;
 
   $txt =~ s/’/'/g;
   $txt =~ s/‘/'/g;

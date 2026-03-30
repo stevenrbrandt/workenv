@@ -185,8 +185,9 @@ vim_dir = os.path.join(home, ".vim", "colors")
 if not os.path.exists(vim_dir):
     os.makedirs(vim_dir)
 LecturedInjury = os.path.join(vim_dir, "LecturedInjury.vim")
+os.makedirs(vim_dir, exist_ok=True)
 with open("vim/colors/LecturedInjury.vim") as fdr:
-    with open(os.path.join(vim_dir), "LecturedInjury.vim") as fdw:
+    with open(os.path.join(vim_dir, "LecturedInjury.vim"),"w") as fdw:
         fdw.write(fdr.read())
 
 torture = os.path.join(vim_dir, "torture.vim")
