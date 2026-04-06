@@ -181,6 +181,7 @@ endif
 colorscheme LecturedInjury
 """.format(here=here),file=fd)
 
+# Install color schemes
 vim_dir = os.path.join(home, ".vim", "colors")
 if not os.path.exists(vim_dir):
     os.makedirs(vim_dir)
