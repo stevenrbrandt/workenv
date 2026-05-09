@@ -21,4 +21,4 @@ then
   echo "sourcebasedir=$(dirname $(pwd))" >> simfactory/etc/defs.local.ini
   perl -p -i -e "s/NO_ALLOCATION/${ACCOUNT}/" simfactory/etc/defs.local.ini
 fi
-trun ./simfactory/bin/sim build sim-cpu -j10 --thornlist $HERE/einsteintoolkit.th |& tee $HERE/make.out
+trun ./simfactory/bin/sim build sim-cpu -j15 --thornlist $HERE/einsteintoolkit.th |& tee $HERE/make.out
