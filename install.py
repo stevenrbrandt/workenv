@@ -150,6 +150,7 @@ then
     telegram-send "$HOST-$(date)"
     LOGGED_IN=yes
 fi
+source long-cmd-notify.sh
 """.format(here=here),file=fd)
 
 vimrc = os.path.join(home,".vimrc")
