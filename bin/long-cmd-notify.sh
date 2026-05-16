@@ -5,7 +5,7 @@ TIMER_THING_EXIT_CODE=""
 TIMER_THING_TIME=""
 TIMER_THING_START=$SECONDS
 TIMER_THING_READY=0
-TIMER_THING_NO_MESSAGE=" vi vim ed nano "
+TIMER_THING_NO_MESSAGE=" vi vim ed nano ssh tmux screen "
 __timer_thing_start__() {
     if [ $TIMER_THING_READY = 0 ]
     then
