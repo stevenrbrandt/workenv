@@ -2,7 +2,7 @@
 
 from shutil import which
 from subprocess import Popen, PIPE
-from typing import Optional, cast, Dict, List, Union, Tuple, Final, Set
+from typing import Optional, Dict, List, Tuple, Final, Set
 from requests.exceptions import ConnectionError
 from time import sleep, time
 from random import shuffle
@@ -17,10 +17,35 @@ from colored import colored
 
 t1 : Final = time()
 
-class fake_res:
-    def __init__(self)->None:
-        self.content = b'invalid'
-        self.status_code = 666
+CODE_MISSPELLING : Final = 406
+CODE_DICT : Final = 207
+NEAR_MISS_MAX_SCORE : Final = 6
+NEAR_MISS_MAX_EDIT : Final = 2
+NEAR_MISS_MIN_LEN : Final = 5
+CAP_ACRONYM : Final = 'acronym'
+CAP_PROPER : Final = 'proper'
+CAP_MIXED : Final = 'mixed'
+CAP_LOCAL : Final = 'local'
+REQUEST_HEADERS : Final = {'User-Agent': 'Mozilla/5.0 (compatible; pyspell/1.0)'}
+
+INVALID_CONTENT_PATTERNS : Final = [
+    re.compile(r'(?i)sorry,\s*no\s+results'),
+    re.compile(r'(?i)no\s+results\s+found'),
+    re.compile(r'(?i)common\s+misspelling'),
+    re.compile(r'(?i)common(?:\s|<[^>]+>)*filler(?:\s|<[^>]+>)*text'),
+    re.compile(r'(?i)is\s+not\s+available\s+in\s+the\s+general\s+english\s+dictionary'),
+    re.compile(r'(?i)did\s+you\s+mean'),
+    re.compile(r'(?i)we\s+couldn\'?t\s+find'),
+    re.compile(r'(?i)no\s+(?:exact\s+)?match(?:es)?\s+found'),
+    re.compile(r'(?i)not\s+found\s+in\s+(?:the\s+)?dictionary'),
+    re.compile(r'(?i)is\s+a\s+misspelling'),
+    re.compile(r'(?i)no\s+dictionary\s+entry'),
+    re.compile(r'(?i)<title>\s*suggestions\s*\|\s*dictionary\.com'),
+    re.compile(r'(?i)did\s+you\s+mean'),
+    re.compile(r'(?i)intended\s+to\s+(?:type|write|search)'),
+    re.compile(r'(?i)make\s+sure\s+you\s+spelled'),
+    re.compile(r'(?i)(?:search|results)\s+suggestions'),
+]
 
 def code_func(arg : str)->int:
     if re.match(r'[24]0\d', arg):
@@ -34,17 +59,32 @@ def code_func(arg : str)->int:
 
 import argparse
 parser = argparse.ArgumentParser(prog='pyspell', description='Python-Based Spell Checker')
-parser.add_argument('--files', type=str, nargs='+', default='', help='files to check')
-parser.add_argument('--set', type=str, nargs=1, default="", help='word to set code for')
-parser.add_argument('--code', type=code_func, nargs=1, default='404')
+parser.add_argument('--files', type=str, nargs='*', default=[], help='files to check')
+parser.add_argument('--set', type=str, default=None, help='word to set code for')
+parser.add_argument('--code', type=code_func, default=404)
 parser.add_argument('--suggest', type=str, nargs='+', default=[], help='find suggested spellings')
 parser.add_argument('--words', type=str, nargs='+', default=[], help='words to check')
 parser.add_argument('--delete', type=str, nargs='+', default=[], help='words to delete')
 parser.add_argument('--locals', action='store_true', default=False, help='whether to use locals')
-parser.add_argument('--force', action='store_true', default=False, help='whether to force a web check')
+parser.add_argument('--force', action='store_true', default=False, help='Bypass cache and re-check words')
+parser.add_argument('--audit', action='store_true', default=False, help='Re-verify cached web-valid words (requires --enable-web)')
+parser.add_argument('--audit-limit', type=int, default=0, help='Max words to audit (0 = all code-200 entries)')
+parser.add_argument('--validate-misspellings', action='store_true', default=False,
+                    help='Web-check words from misspellings.txt not already classified as misspellings (requires --enable-web)')
+parser.add_argument('--misspellings-file', type=str, default='misspellings.txt',
+                    help='Input file for --validate-misspellings')
+parser.add_argument('--validate-limit', type=int, default=0,
+                    help='Max words to validate from misspellings file (0 = all)')
+parser.add_argument('--scan-near-misses', action='store_true', default=False,
+                    help='Downgrade valid DB words that look like typos of another valid word')
+parser.add_argument('--scan-near-misses-limit', type=int, default=0,
+                    help='Max words to scan for near-miss typos (0 = all valid entries)')
 parser.add_argument('--tmout', type=int, default=5, help='timeout to use for websites')
 parser.add_argument('--ascii-db', action='store_true', default=False, help='Write out the database to words.txt')
-parser.add_argument('--vdiff', action='store_true', default=False, help='Generate a vdiff file with suggested substitituions.')
+parser.add_argument('--check-caps', action='store_true', default=False, help='Flag words that disagree with stored capitalization')
+parser.add_argument('--list-caps', action='store_true', default=False, help='List words with required capitalization from the DB')
+parser.add_argument('--set-cap', type=str, default=None, help='Manually set required capitalization for a word')
+parser.add_argument('--vdiff', action='store_true', default=False, help='Generate a vdiff file with suggested substitutions.')
 parser.add_argument('--enable-web', action='store_true', default=False, help='Check on the web')
 pres=parser.parse_args(sys.argv[1:])
 
@@ -56,156 +96,27 @@ word_counts : Dict[str,Dict[str,int]]= {}
 conn = sqlite3.connect(words_db)
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS words (word text primary key, code integer)")
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS case_words (
+        lower text primary key,
+        canonical text not null,
+        kind text not null,
+        seen integer not null default 1
+    )
+""")
 result = cursor.execute("SELECT count(*) FROM words WHERE code >= 200 and code < 300")
 print("Total words in DB:",result.fetchone()[0])
 result = cursor.execute("SELECT count(*) FROM words WHERE code < 200 or code >= 300")
 print("Misspellings in DB:",result.fetchone()[0])
+result = cursor.execute("SELECT count(*) FROM case_words")
+print("Cased words in DB:",result.fetchone()[0])
 locals : Dict[str,int] = {}
 misspellings : Dict[str,int] = {}
+case_words_db : Dict[str,Tuple[str,str]] = {}
 
 def ok(code : int)->bool:
     assert type(code) == int
     return code >= 200 and code < 300
-
-disable_web = not pres.enable_web #True
-
-def check_web(num : int,word : str,force : bool=False)->int:
-    if disable_web:
-        return 444
-
-    ret : int = 0
-    res : Union[fake_res,requests.Response] = fake_res()
-    if num == 1:
-        wword = word.replace("'","-")
-        url = "http://www.dictionary.com/browse/%s" % wword
-        res = requests.get(url, timeout=tmout)
-        ret = res.status_code
-    elif num == 2:
-        wword = word.replace("'","-")
-        url = "https://www.yourdictionary.com/%s" % wword
-        res = requests.get(url, timeout=tmout)
-    elif num == 3:
-        pword = word.replace("'","%27")
-        url = "https://www.thefreedictionary.com/%s" % pword
-        try:
-            sleep(2)
-            res = requests.get(url, timeout=tmout)
-        except:
-            ret = 404
-
-        else:
-            ret = res.status_code
-    elif num == 4:
-        nword = word.replace("'","")
-        url = "https://www.collinsdictionary.com/us/dictionary/english/%s" % nword
-        sleep(2)
-        res = requests.get(url, timeout=tmout)
-        ret = 200
-
-    ret = res.status_code
-    if ok(ret):
-        content = res.content.decode()
-    else:
-        content = ""
-
-    if "Sorry, no results for" in content:
-        return 406
-    elif re.search(r'(?i)common\s+misspelling\s+of', content):
-        ret = 406
-    elif 'is not available in the general English dictionary' in res.content.decode():
-        ret = 406
-
-    if ok(ret):
-        print("  ",colored("Found:","green"),url,"->",ret)
-    else:
-        print("  ",colored("Not found:","red"),url,"->",ret)
-    return ret
-
-def manual(word : str, code : int)->None:
-    print("Action: Setting '%s' to '%d'" % (word, code))
-    cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (word,code))
-    conn.commit()
-
-def word_in_dict(word : str)->bool:
-    if which("dict") is None:
-        return True
-    p = Popen(["dict",word],universal_newlines=True,stdout=PIPE,stderr=PIPE)
-    o, e = p.communicate()
-    #if p.returncode != 0:
-    #    print(colored(f" --> word={word}, rc={p.returncode}","red"))
-    return p.returncode == 0
-    
-def check(word:str,force:bool=False)->bool:
-    global disable_web
-
-    if word == "":
-        return True
-    if word[0] in '\\':
-        return True
-    result : Tuple[int,...]
-    if word in locals:
-        result = (locals[word],)
-    else:
-        # Escape for safety in sqlite3
-        rword = word.replace("'","''")
-        cursor.execute("SELECT code FROM words WHERE word = '%s'" % rword)
-        result = cursor.fetchone()
-        if force or result == None:
-            if word_in_dict(rword):
-                status_code = 207
-                cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
-                conn.commit()
-                result = (status_code,)
-        if force or result == None:
-            order = [1,2,3,4]
-            shuffle(order)
-            if not disable_web:
-                print("Try web:",word)
-            for site in order:
-                try:
-                    status_code = check_web(site, word, force)
-                except ConnectionError as ce:
-                    status_code = 444
-                    disable_web = True
-                if ok(status_code):
-                    break
-            if status_code != 444:
-                cursor.execute("INSERT OR REPLACE INTO WORDS (word,code) values ('%s',%d)" % (rword,status_code))
-                conn.commit()
-            result = (status_code,)
-        locals[word] = result[0]
-    return ok(result[0])
-
-caps : Dict[str,str] = {}
-
-try:
-  # If a locals.txt file exists, we
-  # need to process it.
-  if pres.locals:
-    with open("locals.txt","r") as fd:
-        for line in fd.readlines():
-            with_case = line.strip()
-            as_lower = with_case.lower()
-            caps[as_lower] = with_case
-            locals[re.sub(r"’","",as_lower)] = 200
-except:
-  pass
-
-miss : Dict[str,Tuple[int,Set[str]]] = {}
-
-def inc_miss(w : str, fname : str)->None:
-    if w not in miss:
-        miss[w] = (1,{fname})
-    else:
-        s2 : Set[str] = set()
-        for item in miss[w][1]:
-            s2.add(item)
-        s2.add(fname)
-        miss[w] = (miss[w][0]+1, s2)
-
-for word in pres.words:
-    if not check(word,force=pres.enable_web):
-        inc_miss(word,"[sys.arv]")
 
 def score(w1 : str,w2 : str)->int:
     sc : Dict[str,int] = {}
@@ -236,10 +147,578 @@ def score(w1 : str,w2 : str)->int:
         if c not in sc:
             sc[c] = 0
         sc[c] -= 1
-    sum = abs(len(w1)-len(w2))*3
+    total = abs(len(w1)-len(w2))*3
     for k in sc.keys():
-        sum += abs(sc[k])
-    return sum
+        total += abs(sc[k])
+    return total
+
+def levenshtein(w1 : str, w2 : str)->int:
+    if w1 == w2:
+        return 0
+    prev = list(range(len(w2) + 1))
+    for i, c1 in enumerate(w1, 1):
+        cur = [i]
+        for j, c2 in enumerate(w2, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (c1 != c2)))
+        prev = cur
+    return prev[len(w2)]
+
+def find_near_miss_valid_word(word : str)->Optional[Tuple[str,int]]:
+    if len(word) < NEAR_MISS_MIN_LEN:
+        return None
+    fl = word[0]
+    ll = word[-1]
+    if ll == "'":
+        ll = ""
+    best = None
+    best_score = NEAR_MISS_MAX_SCORE + 1
+    lo = max(NEAR_MISS_MIN_LEN, len(word) - NEAR_MISS_MAX_EDIT)
+    hi = len(word) + NEAR_MISS_MAX_EDIT
+    for (candidate,) in cursor.execute(
+            "SELECT word FROM words WHERE code >= 200 AND code < 300 "
+            "AND length(word) BETWEEN ? AND ? AND word LIKE ? AND word != ?",
+            (lo, hi, fl + '%' + ll, word)):
+        if levenshtein(word, candidate) > NEAR_MISS_MAX_EDIT:
+            continue
+        s = score(candidate, word)
+        if s < best_score:
+            best_score = s
+            best = candidate
+    if best is not None and best_score <= NEAR_MISS_MAX_SCORE:
+        return best, best_score
+    return None
+
+def should_downgrade_typo(word : str, candidate : str, match_score : int, code : int)->bool:
+    if code == CODE_DICT:
+        return False
+    if len(candidate) > len(word):
+        return True
+    if (len(candidate) == len(word) and match_score <= 3
+            and code == 200 and candidate != word):
+        return True
+    return False
+
+def finalize_web_code(word : str, code : int)->int:
+    if not ok(code):
+        return code
+    near = find_near_miss_valid_word(word)
+    if near is None:
+        return code
+    candidate, match_score = near
+    if not should_downgrade_typo(word, candidate, match_score, code):
+        return code
+    print(colored(
+        f"  Near-miss of '{candidate}' (score={match_score}), rejecting '{word}'",
+        "yellow"))
+    return CODE_MISSPELLING
+
+disable_web = not pres.enable_web #True
+
+def html_snippet(text : str)->str:
+    text = text.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+    text = text.replace('&quot;', '"').replace('&#39;', "'")
+    return re.sub(r'<[^>]+>', ' ', text)
+
+def yourdictionary_definition(word : str, content : str)->Optional[str]:
+    match = re.search(
+        r'(?i)content="[^"]*\b' + re.escape(word) + r'\b[^"]*definition:\s*([^"]+)"',
+        content)
+    if not match:
+        return None
+    return html_snippet(match.group(1)).strip()
+
+def interpret_web_response(num : int, word : str, http_status : int, content : str)->int:
+    if re.search(r'(?i)just a moment|cf-browser-verification|access denied', content):
+        return 444
+
+    for pattern in INVALID_CONTENT_PATTERNS:
+        if pattern.search(content):
+            return CODE_MISSPELLING
+
+    if num == 1:
+        if http_status == 404 or re.search(r'(?i)no\s+results\s+found', content):
+            return 404
+
+    if num == 2 and ok(http_status):
+        definition = yourdictionary_definition(word, content)
+        if definition is None:
+            return 404
+        if re.match(r'(?i)common\s+(?:misspelling|filler)\b', definition):
+            return CODE_MISSPELLING
+
+    if ok(http_status):
+        return finalize_web_code(word, http_status)
+    return 404
+
+def check_web(num : int,word : str,force : bool=False)->int:
+    if disable_web:
+        return 444
+
+    url = ""
+    try:
+        if num == 1:
+            wword = word.replace("'","-")
+            url = "http://www.dictionary.com/browse/%s" % wword
+            res = requests.get(url, timeout=tmout, headers=REQUEST_HEADERS)
+        elif num == 2:
+            wword = word.replace("'","-")
+            url = "https://www.yourdictionary.com/%s" % wword
+            res = requests.get(url, timeout=tmout, headers=REQUEST_HEADERS)
+        elif num == 3:
+            pword = word.replace("'","%27")
+            url = "https://www.thefreedictionary.com/%s" % pword
+            sleep(2)
+            res = requests.get(url, timeout=tmout, headers=REQUEST_HEADERS)
+        elif num == 4:
+            nword = word.replace("'","")
+            url = "https://www.collinsdictionary.com/us/dictionary/english/%s" % nword
+            sleep(2)
+            res = requests.get(url, timeout=tmout, headers=REQUEST_HEADERS)
+        else:
+            return 404
+    except (ConnectionError, requests.RequestException):
+        print("  ",colored("Not found:","red"),url,"->",404)
+        return 404
+
+    content = res.content.decode(errors='replace')
+    ret = interpret_web_response(num, word, res.status_code, content)
+
+    if ok(ret):
+        print("  ",colored("Found:","green"),url,"->",ret)
+    else:
+        print("  ",colored("Not found:","red"),url,"->",ret)
+    return ret
+
+def manual(word : str, code : int)->None:
+    print("Action: Setting '%s' to '%d'" % (word, code))
+    cursor.execute("INSERT OR REPLACE INTO words (word, code) VALUES (?, ?)", (word, code))
+    conn.commit()
+
+def case_kind(word : str)->str:
+    letters = [c for c in word if c.isalpha()]
+    if len(letters) >= 2 and all(c.isupper() for c in letters):
+        return CAP_ACRONYM
+    if len(word) > 1 and word[0].isupper() and word[1:].islower():
+        return CAP_PROPER
+    if any(c.isupper() for c in word[1:]):
+        return CAP_MIXED
+    if word and word[0].isupper():
+        return CAP_PROPER
+    return CAP_PROPER
+
+def load_case_words()->None:
+    case_words_db.clear()
+    for lower, canonical, kind in cursor.execute(
+            "SELECT lower, canonical, kind FROM case_words"):
+        case_words_db[lower] = (canonical, kind)
+
+def upsert_case_word(lower : str, canonical : str, kind : str, seen : int = 1)->None:
+    row = cursor.execute(
+        "SELECT canonical, kind, seen FROM case_words WHERE lower = ?",
+        (lower,)).fetchone()
+    if row is None:
+        cursor.execute(
+            "INSERT INTO case_words (lower, canonical, kind, seen) VALUES (?, ?, ?, ?)",
+            (lower, canonical, kind, seen))
+        case_words_db[lower] = (canonical, kind)
+    elif row[0] == canonical:
+        new_seen = row[2] + seen
+        cursor.execute(
+            "UPDATE case_words SET seen = ? WHERE lower = ?",
+            (new_seen, lower))
+        case_words_db[lower] = (canonical, kind)
+    elif seen > row[2]:
+        cursor.execute(
+            "UPDATE case_words SET canonical = ?, kind = ?, seen = ? WHERE lower = ?",
+            (canonical, kind, seen, lower))
+        case_words_db[lower] = (canonical, kind)
+    else:
+        cursor.execute(
+            "UPDATE case_words SET seen = ? WHERE lower = ?",
+            (row[2] + seen, lower))
+    conn.commit()
+
+def pick_canonical_form(lower : str, variants : Dict[str,int])->Optional[Tuple[str,str]]:
+    cased = [(form, count) for form, count in variants.items() if form != lower]
+    if not cased:
+        return None
+    canonical, _ = max(cased, key=lambda item: item[1])
+    return canonical, case_kind(canonical)
+
+def sync_case_words_from_counts()->None:
+    for lower, variants in word_counts.items():
+        picked = pick_canonical_form(lower, variants)
+        if picked is None:
+            continue
+        canonical, kind = picked
+        upsert_case_word(lower, canonical, kind, variants[canonical])
+
+def capitalization_ok(word_found : str, lower : str)->bool:
+    if lower not in case_words_db:
+        return True
+    canonical, _ = case_words_db[lower]
+    return word_found == canonical
+
+def word_in_dict(word : str)->bool:
+    if which("dict") is None:
+        return False
+    p = Popen(["dict",word],universal_newlines=True,stdout=PIPE,stderr=PIPE)
+    o, e = p.communicate()
+    #if p.returncode != 0:
+    #    print(colored(f" --> word={word}, rc={p.returncode}","red"))
+    return p.returncode == 0
+    
+def recheck_web(word : str)->int:
+    global disable_web
+    order = [1, 2, 3, 4]
+    shuffle(order)
+    status_code = 404
+    for site in order:
+        try:
+            site_code = check_web(site, word)
+        except ConnectionError:
+            site_code = 444
+            disable_web = True
+        if ok(site_code):
+            return site_code
+        if site_code != 444:
+            status_code = site_code
+    return status_code
+
+def audit_words(limit : int = 0)->None:
+    rows = cursor.execute(
+        "SELECT word, code FROM words WHERE code = 200 ORDER BY word"
+    ).fetchall()
+    if limit > 0:
+        rows = rows[:limit]
+
+    confirmed = 0
+    downgraded = 0
+    print("Auditing", len(rows), "web-cached words (code 200)...")
+    for word, old_code in rows:
+        if disable_web:
+            print(colored("Audit stopped: web checks disabled.", "yellow"))
+            break
+        locals.pop(word, None)
+        new_code = recheck_web(word)
+        if new_code == 444:
+            print(colored("Audit stopped: site blocked or unreachable.", "yellow"))
+            break
+        if ok(new_code):
+            if new_code != old_code:
+                cursor.execute("UPDATE words SET code = ? WHERE word = ?", (new_code, word))
+            confirmed += 1
+        else:
+            print(colored(f"DOWNGRADE: {word}  {old_code} -> {new_code}", "yellow"))
+            cursor.execute("UPDATE words SET code = ? WHERE word = ?", (new_code, word))
+            downgraded += 1
+        conn.commit()
+    print(f"Audit complete: {confirmed} confirmed, {downgraded} downgraded")
+
+def scan_near_misses(limit : int = 0)->None:
+    rows = cursor.execute(
+        "SELECT word, code FROM words WHERE code >= 200 AND code < 300 ORDER BY word"
+    ).fetchall()
+    if limit > 0:
+        rows = rows[:limit]
+
+    confirmed = 0
+    downgraded = 0
+    print(f"Scanning {len(rows)} valid words for near-miss typos...")
+    for word, old_code in rows:
+        near = find_near_miss_valid_word(word)
+        if near is None:
+            confirmed += 1
+            continue
+        candidate, match_score = near
+        if not should_downgrade_typo(word, candidate, match_score, old_code):
+            confirmed += 1
+            continue
+        cand_row = cursor.execute(
+            "SELECT code FROM words WHERE word = ?", (candidate,)).fetchone()
+        if cand_row is None or not ok(cand_row[0]):
+            confirmed += 1
+            continue
+        print(colored(
+            f"DOWNGRADE: {word}  near-miss of '{candidate}' "
+            f"(score={match_score}, was {old_code})",
+            "yellow"))
+        cursor.execute(
+            "UPDATE words SET code = ? WHERE word = ?",
+            (CODE_MISSPELLING, word))
+        conn.commit()
+        locals.pop(word, None)
+        downgraded += 1
+    print(f"Near-miss scan complete: {confirmed} ok, {downgraded} downgraded")
+
+LEADING_APOSTROPHE_WORDS : Final = (
+    "'tis", "'twas", "'til", "'em", "'cause", "'bout", "'fore",
+    "'round", "'neath",
+)
+
+def _leading_apostrophe_word(text : str, pos : int)->bool:
+    if pos >= len(text) or text[pos] != "'":
+        return False
+    rest = text[pos:].lower()
+    for prefix in LEADING_APOSTROPHE_WORDS:
+        end = pos + len(prefix)
+        if rest.startswith(prefix) and (end >= len(text) or not text[end].isalpha()):
+            return True
+    return False
+
+def _apostrophe_inside_word(text : str, pos : int)->bool:
+    return (pos > 0 and pos + 1 < len(text)
+            and text[pos - 1].isalpha() and text[pos + 1].isalpha())
+
+def _single_quote_opener(text : str, pos : int)->bool:
+    if _leading_apostrophe_word(text, pos):
+        return False
+    if pos + 1 >= len(text) or not text[pos + 1].isalpha():
+        return False
+    return pos == 0 or not text[pos - 1].isalpha()
+
+def unwrap_single_quote_delimiters(text : str)->str:
+    """Drop paired quote delimiters, but keep apostrophes that belong to words."""
+    out : List[str] = []
+    i = 0
+    n = len(text)
+    in_quote = False
+    while i < n:
+        ch = text[i]
+        if ch != "'":
+            out.append(ch)
+            i += 1
+            continue
+        if not in_quote:
+            if _leading_apostrophe_word(text, i) or _apostrophe_inside_word(text, i):
+                out.append("'")
+                i += 1
+                continue
+            if _single_quote_opener(text, i):
+                in_quote = True
+                i += 1
+                continue
+            out.append("'")
+            i += 1
+            continue
+        if _apostrophe_inside_word(text, i):
+            out.append("'")
+            i += 1
+            continue
+        in_quote = False
+        i += 1
+    return ''.join(out)
+
+def normalize_token(word : str)->str:
+    word = re.sub(r"’","'",word)
+    word = re.sub(r"'s$","",word)
+    return word
+
+def spell_lookup_forms(word : str)->List[str]:
+    forms : List[str] = []
+    for candidate in (word, word.rstrip("'"), word.replace("'", "")):
+        if candidate and candidate not in forms:
+            forms.append(candidate)
+    return forms
+
+def load_misspellings_file(path : str)->List[str]:
+    words : List[str] = []
+    seen : Set[str] = set()
+    with open(path, encoding='utf-8', errors='replace') as fd:
+        for line in fd:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            token = line.split(None, 1)[0]
+            word = normalize_token(token).lower()
+            if word and word not in seen:
+                seen.add(word)
+                words.append(word)
+    return words
+
+def is_recorded_misspelling(word : str)->bool:
+    row = cursor.execute("SELECT code FROM words WHERE word = ?", (word,)).fetchone()
+    if row is None:
+        return False
+    return not ok(row[0])
+
+def already_misspelling(word : str)->bool:
+    return any(is_recorded_misspelling(form) for form in spell_lookup_forms(word))
+
+def validate_misspellings_file(path : str, limit : int = 0)->None:
+    if not os.path.isfile(path):
+        print(colored(f"error: misspellings file not found: {path}", "red"))
+        sys.exit(1)
+
+    words = load_misspellings_file(path)
+    if limit > 0:
+        words = words[:limit]
+
+    skipped = 0
+    validated = 0
+    valid = 0
+    invalid = 0
+    print(f"Validating {len(words)} words from {path}...")
+    for word in words:
+        if disable_web:
+            print(colored("Validation stopped: web checks disabled.", "yellow"))
+            break
+        if already_misspelling(word):
+            print(f"  SKIP {word} (already a misspelling in DB)")
+            skipped += 1
+            continue
+
+        for form in spell_lookup_forms(word):
+            locals.pop(form, None)
+
+        row = cursor.execute("SELECT code FROM words WHERE word = ?", (word,)).fetchone()
+        old_code = row[0] if row else None
+        new_code = recheck_web(word)
+        if new_code == 444:
+            print(colored(f"  UNVERIFIED {word} (web blocked or unreachable)", "yellow"))
+            continue
+        new_code = finalize_web_code(word, new_code)
+
+        validated += 1
+        cursor.execute(
+            "INSERT OR REPLACE INTO words (word, code) VALUES (?, ?)",
+            (word, new_code))
+        conn.commit()
+
+        if ok(new_code):
+            valid += 1
+            msg = f"  VALID {word} -> {new_code}"
+            if old_code is not None and not ok(old_code):
+                msg += f" (was {old_code})"
+            print(colored(msg, "green"))
+        else:
+            invalid += 1
+            msg = f"  MISSPELLING {word} -> {new_code}"
+            if old_code is not None and ok(old_code):
+                msg += f" (was {old_code})"
+            print(colored(msg, "yellow"))
+
+    print(f"Validation complete: {validated} checked, {skipped} skipped, "
+          f"{valid} valid, {invalid} misspelling")
+
+def check(word:str,force:bool=False,ignore_locals:bool=False)->bool:
+    global disable_web
+
+    if word == "":
+        return True
+    if word[0] in '\\':
+        return True
+    for form in spell_lookup_forms(word):
+        if _check_one(form, force=force, ignore_locals=ignore_locals):
+            return True
+    return False
+
+def _check_one(word:str,force:bool=False,ignore_locals:bool=False)->bool:
+    global disable_web
+
+    result : Tuple[int,...]
+    if not ignore_locals and word in locals:
+        result = (locals[word],)
+    else:
+        cursor.execute("SELECT code FROM words WHERE word = ?", (word,))
+        result = cursor.fetchone()
+        if force or result == None:
+            if word_in_dict(word):
+                status_code = CODE_DICT
+                cursor.execute("INSERT OR REPLACE INTO words (word, code) VALUES (?, ?)", (word, status_code))
+                conn.commit()
+                result = (status_code,)
+        if force or result == None:
+            order = [1,2,3,4]
+            shuffle(order)
+            if not disable_web:
+                print("Try web:",word)
+            for site in order:
+                try:
+                    status_code = check_web(site, word, force)
+                except ConnectionError:
+                    status_code = 444
+                    disable_web = True
+                if ok(status_code):
+                    break
+            if status_code != 444:
+                cursor.execute("INSERT OR REPLACE INTO words (word, code) VALUES (?, ?)", (word, status_code))
+                conn.commit()
+            result = (status_code,)
+        locals[word] = result[0]
+    code = result[0]
+    if ok(code):
+        code = finalize_web_code(word, code)
+        if code != result[0]:
+            cursor.execute(
+                "INSERT OR REPLACE INTO words (word, code) VALUES (?, ?)",
+                (word, code))
+            conn.commit()
+            locals[word] = code
+    return ok(code)
+
+local_words_list : List[str] = []
+
+load_case_words()
+
+try:
+  # If a locals.txt file exists, we
+  # need to process it.
+  if pres.locals:
+    with open("locals.txt","r") as fd:
+        for line in fd.readlines():
+            with_case = line.strip()
+            if not with_case:
+                continue
+            as_lower = with_case.lower()
+            local_words_list.append(with_case)
+            locals[re.sub(r"’","",as_lower)] = 200
+            if with_case != as_lower:
+                upsert_case_word(as_lower, with_case, CAP_LOCAL)
+except OSError:
+  pass
+
+if pres.set_cap is not None:
+    cap_word = pres.set_cap
+    upsert_case_word(cap_word.lower(), cap_word, CAP_LOCAL)
+
+if pres.audit:
+    if disable_web:
+        print(colored("error: --audit requires --enable-web", "red"))
+        sys.exit(1)
+    audit_words(pres.audit_limit)
+
+if pres.validate_misspellings:
+    if disable_web:
+        print(colored("error: --validate-misspellings requires --enable-web", "red"))
+        sys.exit(1)
+    validate_misspellings_file(pres.misspellings_file, pres.validate_limit)
+
+if pres.scan_near_misses:
+    scan_near_misses(pres.scan_near_misses_limit)
+
+miss : Dict[str,Tuple[int,Set[str]]] = {}
+cap_miss : Dict[str,Tuple[str,int,Set[str]]] = {}
+
+def inc_cap_miss(lower : str, found : str, canonical : str, fname : str)->None:
+    if lower not in cap_miss:
+        cap_miss[lower] = (found, 1, {fname})
+    else:
+        cap_miss[lower] = (found, cap_miss[lower][1] + 1, cap_miss[lower][2] | {fname})
+
+def inc_miss(w : str, fname : str)->None:
+    if w not in miss:
+        miss[w] = (1,{fname})
+    else:
+        s2 : Set[str] = set()
+        for item in miss[w][1]:
+            s2.add(item)
+        s2.add(fname)
+        miss[w] = (miss[w][0]+1, s2)
+
+for word in pres.words:
+    if not check(word, force=pres.force):
+        inc_miss(word,"[sys.arv]")
 
 def suggest2(result:'sqlite3.Cursor',word:str)->str:
     bscore = None
@@ -264,8 +743,9 @@ def suggest3(word:str)->List[Tuple[str,int]]:
     ll = word[-1]
     if ll == "'":
         ll = ""
-    sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
-    result = cursor.execute(sql)
+    result = cursor.execute(
+        "SELECT word FROM words WHERE code >= 200 AND code < 300 AND word LIKE ?",
+        (fl + '%' + ll,))
     scores : List[Tuple[str,int]] = []
     while True:
         record = result.fetchone()
@@ -277,16 +757,13 @@ def suggest3(word:str)->List[Tuple[str,int]]:
         if len(scores) > 15:
             scores = sorted(scores,key=f2)
             scores = scores[0:10]
-    if pres.locals:
-        with open("locals.txt","r") as fd:
-            for line in fd.readlines():
-                potential = line.strip()
-                s = score(potential, word)
-                scores += [(potential, s)]
-                if len(scores) > 15:
-                    scores = sorted(scores,key=f2)
-                    scores = scores[0:10]
-    return scores
+    for potential in local_words_list:
+        s = score(potential, word)
+        scores += [(potential, s)]
+        if len(scores) > 15:
+            scores = sorted(scores,key=f2)
+            scores = scores[0:10]
+    return sorted(scores, key=f2)
 
 suggest_cache : Dict[bool,Dict[str,str]] = {True:{}, False:{}}
 
@@ -298,18 +775,20 @@ def suggest(word:str,use3:bool=True)->str:
     w = re.sub(r"['\s]","",w)
     if len(w) <= 1:
         return "?"
-    #fl = w[0]
-    #ll = w[-1]
-    #if use3:
-    #    result = cursor.execute("SELECT word FROM words WHERE code >= 200 and code < 300")
-    #else:
-    #    sql = "SELECT word FROM words WHERE code >= 200 and code < 300 and word like '%s%s%s'" % (fl,'%',ll)
-    #print("sql:",sql,fl,ll,w)
-    #    result = cursor.execute(sql)
     if use3:
-        retval = suggest3(word)[0][0]
+        scores = suggest3(word)
+        retval = scores[0][0] if scores else "?"
     else:
-        retval = suggest2(result,word)
+        fl = w[0]
+        ll = w[-1]
+        if ll == "'":
+            ll = ""
+        result = cursor.execute(
+            "SELECT word FROM words WHERE code >= 200 AND code < 300 AND word LIKE ?",
+            (fl + '%' + ll,))
+        retval = suggest2(result, word)
+        if retval == "":
+            retval = "?"
     suggest_cache[use3][word] = retval
     return retval
 
@@ -320,6 +799,7 @@ def do_text(text:str, fname:str)->str:
     text = re.sub(r"`([^']*)'",r'\1',text)
     # Remove enclosing single quotes
     text = re.sub(r"\w+=(?<=[\s\.,\?])'([^']*)'(?=[\s\.,\?])",r'\1',text)
+    text = unwrap_single_quote_delimiters(text)
 
     pos = 0
     s = ""
@@ -328,20 +808,16 @@ def do_text(text:str, fname:str)->str:
             s += text[pos:w.start()]
         pos = w.end()
 
-        word : str = w.group(1)
-        # Normalize apostrophe
-        word = re.sub(r"’","'",word)
-        # Remove trailing 's
-        word = re.sub(r"'s$","",word)
+        word : str = normalize_token(w.group(1))
         # Skip over words with numbers and underscores
         if re.match(r".*[\d_]",word):
             if pres.vdiff:
                 s += w.group()
             continue
-        # Remove trailing '
-        word = re.sub(r"'$","",word)
-        # Remove leading '
-        word = re.sub(r"^'","",word)
+        if word == "" or word == "'":
+            if pres.vdiff:
+                s += w.group()
+            continue
 
         # Check on word counts
         word_found = word
@@ -353,7 +829,10 @@ def do_text(text:str, fname:str)->str:
         else:
             word_counts[word][word_found] += 1
 
-        if check(word):
+        if check(word, force=pres.force):
+            if pres.check_caps and not capitalization_ok(word_found, word):
+                canonical, _ = case_words_db[word]
+                inc_cap_miss(word, word_found, canonical, fname)
             if pres.vdiff:
                 s += w.group()
         else:
@@ -443,6 +922,8 @@ class ThreadedFWriter(FWriter,Thread):
         self.queue.put(line)
     def close(self)->None:
         self.queue.put(None)
+        self.join()
+        self.fd.close()
 
 #fw = FWriter("out.txt")
 #fw.write("Hello")
@@ -456,7 +937,7 @@ for a in pres.files:
     if re.match(r'.*\.(txt|md|tex)$',a):
         fw : FWriter
         if pres.vdiff:
-            fw = ThreadedFWriter("."+a+".vdiff")
+            fw = ThreadedFWriter(a + ".vdiff")
         else:
             fw = EmptyFWriter()
         try:
@@ -532,14 +1013,34 @@ else:
                 print(word,suggest(word,use3=False),f"times={miss[word]}",file=fd)
 
 for word in pres.delete:
-    rword = word.replace("'","''")
-    cmd = "DELETE FROM words WHERE word = '%s'" % rword
-    cursor.execute(cmd)
-    #print(cmd)
+    cursor.execute("DELETE FROM words WHERE word = ?", (word,))
     conn.commit()
 
-if pres.set != "" and pres.code != "":
-    manual(pres.set[0], int(pres.code[0]))
+if pres.files:
+    sync_case_words_from_counts()
+
+if pres.set is not None:
+    manual(pres.set, pres.code)
+    if pres.set != pres.set.lower():
+        upsert_case_word(pres.set.lower(), pres.set, case_kind(pres.set))
+
+if pres.list_caps:
+    print()
+    print("Required capitalization:")
+    print("=====================")
+    for lower, canonical, kind, seen in cursor.execute(
+            "SELECT lower, canonical, kind, seen FROM case_words ORDER BY lower"):
+        print(f"{lower:20} -> {canonical:20} [{kind:8}] seen={seen}")
+
+cap_words = sorted(cap_miss.keys())
+if cap_words:
+    print()
+    print("Capitalization mismatches:")
+    print("==========================")
+    for lower in cap_words:
+        found, count, fnames = cap_miss[lower]
+        canonical, kind = case_words_db[lower]
+        print(f"{found} -> {canonical} ({kind}) times={count} files={','.join(sorted(fnames))}")
 
 if pres.ascii_db:
     with open("ascii-db.txt","w") as fd:
@@ -553,13 +1054,3 @@ if pres.ascii_db:
 t2 = time()
 
 print("Time:",t2-t1)
-#for word in word_counts:
-#    n = 0
-#    ww : Set[str] = set()
-#    for w in word_counts[word]:
-#        n += word_counts[word][w]
-#        ww.add(w)
-#    if len(ww)==1 and w != w.lower():
-#        print("Proper Noun?:",word)
-#    if n == 1:
-#        print("Unique word:",word)

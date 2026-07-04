@@ -21,6 +21,8 @@ if not found:
 
 with open(os.path.join(home,".bashaux"),"w") as fd:
     print("""
+export LD_LIBRARY_PATH="$HOME/workenv/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$HOME/workenv/lib64:$LD_LIBRARY_PATH"
 if [ -d ~/venv ]
 then
     source ~/venv/bin/activate

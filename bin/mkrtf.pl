@@ -118,13 +118,7 @@ my ($marginl,$marginr,$margint,$marginb) =
 my $bold_chapters = 1;
 my $mode = "submit";
 my $scenebrk = "#";
-my $use_firstletter = 0;
-my $firstletter = 1;
-
-sub setbrk {
-    $scenebrk = shift;
-    print("New break: $scenebrk\n");
-}
+my $firstletter = 0;
 
 ######################################
 #Commands:
@@ -156,22 +150,7 @@ sub setmode {
     $chapter_lines=15;
     $paperw = 8.5;
     $paperh = 11.0;
-    $center_scene_brk = 1;
-    ($marginl,$marginr,$margint,$marginb) = 
-    (     1.0,     1.0,     1.0,     1.0);
-  } elsif($mode eq "develop") {
-    print "DEVELOP MODE ON\n";
-    $chapters_on = 1;
-    $italics_on = 1;
-    $spacing = 2;
-    $font_size = 12;
-    $font = "Times New Roman";
-    $notes_on = 1;
-    $bold_chapters = 0;
-    $chapter_lines=15;
-    $paperw = 8.5;
-    $paperh = 11.0;
-    $center_scene_brk = 1;
+    $center_scene_brk = 0;
     ($marginl,$marginr,$margint,$marginb) = 
     (     1.0,     1.0,     1.0,     1.0);
   } elsif($mode eq "test") {
@@ -207,9 +186,9 @@ sub setmode {
   } elsif($mode eq "submit-andromeda") {
     print "SUBMIT MODE ON\n";
     $chapters_on = 0;
-    $indent = (5.0*$mm)/1440.0;
-    #$scenebrk = "* * *";
-    setbrk("* * *");
+    $indent = 5.0*$mm;
+    printf("indent=%f\n",$indent);
+    $scenebrk = "* * *";
     $italics_on = 0;
     $ellipsis = 1;
     $emdash = 1;
@@ -344,6 +323,7 @@ sub setmode {
 
 die "bad font" unless (defined($fonts{$font}));
 
+my $fs = 2*$font_size;
 my $first_title = 1;
 my $wc=0;
 my $par=0;
@@ -399,7 +379,7 @@ while(<$fdr>) {
     } elsif(/<font=(["'])(.*)\1>/) {
         addfont($2);
     } elsif(/<scenebrk=(["'])(.*)\1>/) {
-        setbrk($2);
+        $scenebrk=$2;
     } elsif(/<emdash-on>/) {
         $emdash = 1;
     } elsif(/<problem="([^"]*)">/) {
@@ -446,12 +426,11 @@ print $fdw "{\\rtf1\\ansi\\deff0 {\\fonttbl \n";
 for my $fk (keys %fonts) {
     print $fdw "{\\f$fonts{$fk} ${fk};}\n";
 }
-my $fs = 2*$font_size;
 print $fdw "}\\fs$fs\n";
 print $fdw "{\\colortbl;\\red0\\green0\\blue0;\\red0\\green155\\blue0;\\red255\\green0\\blue0;}\n";
 printf $fdw "\\margl%d\\margr%d\\margt%d\\margb%d\\gutter%d ",$mll,$mlr,$mlt,$mlb,$gutter*1440.0+.5;
 printf $fdw "\\paperw%d\\paperh%d",$paperw*1440.0,$paperh*1440.0;
-print $fdw "{\\sectd ";
+#print $fdw "{\\sectd ";
 my $init = 1;
 
 my $fdd = new FileHandle;
@@ -585,11 +564,9 @@ while(<$fdr>) {
             die "bad font=$2" unless(defined($fonts{$2}));
             $ftype .= "\\f".$fonts{$2};
         }
-        #my $indent = 720;
+        my $indent = 720;
         if($flags =~ /\bindent=(\d+(\.\d+)?)/) {
-            die "Don't do this. $.";
             $indent = int(1440.0*$1);
-            print("Re-indent=$indent\n");
         }
         #if($1 eq "p") {
         #  print $fdw "{";
@@ -600,8 +577,7 @@ while(<$fdr>) {
         #}
         print $fdw $ftype;
         #$main::tighten="\\li720\\ri720\\fi120";
-        my $pindent = $indent*720;
-        $main::tighten="\\li${pindent}\\ri${pindent}\\fi120";
+        $main::tighten="\\li${indent}\\ri${indent}\\fi120";
         if($flags =~ /\bcenter\b/) {
             $main::tighten .= "\\qc ";
         }
@@ -623,8 +599,7 @@ while(<$fdr>) {
             my $tc = $i+1; #$titles[$i];
             my $right = "{\\field{\\*\\fldinst PAGEREF a$tc}{\\fldrslt}}";
             $left = $titles[$i];
-            #my $link  = "{\\field{\\*\\fldinst HYPERLINK \\\\l \"a$tc\"}{\\fldrslt\\ul0 $left}}";
-            my $link = $left;
+            my $link  = "{\\field{\\*\\fldinst HYPERLINK \\\\l \"a$tc\"}{\\fldrslt\\ul0 $left}}";
             print $fdw "{\\pard $link \\tqr\\tldot\\tx$sz\\tab\\ql $right \\par}\n";
         }
     } elsif(/<tocall2>/) {
@@ -686,19 +661,19 @@ while(<$fdr>) {
     } elsif(/<(note|problem)="([^"]*)">/) {
         my $note=$2;
         if($notes_on) {
-            print "  NOTE: $note\n";
+            print "NOTE: $note\n";
             #print $fdw "{\\rtlch \\ltrch\\loch {\\*\\atnid }\\chatn{\\*\\annotation{\\*\\atnref 0}$note}}\n";
             print $fdw "{\\pard \\par}\n";
             print $fdw "{\\pard \\cf2 NOTE: $note \\par}\n";
             print $fdw "{\\pard \\par}\n";
         }
-    } elsif(/<scene>/) {
+    } elsif(/<scene.*>/) {
         endpar();
         if($center_scene_brk) {
           print $fdw "{\\pard \\par}{\\pard\\qc ${scenebrk} \\par}\n";
         } else {
           startpar();
-          print $fdw ${scenebrk};
+          print $fdw "#";
           endpar();
         }
         $par = 0;
@@ -774,8 +749,6 @@ while(<$fdr>) {
       $paperh = 1*$2;
     } elsif(/<font=.*>/) {
       ;
-    } elsif(/<scenebrk=/) {
-      ;
     } elsif(/^\s*<[\w-]+(="[^"]*")?>\s*$/) {
         die "undefined control ".$&." on line $.";
     } elsif(/^\s*$/) {
@@ -825,7 +798,7 @@ while(<$fdr>) {
         #s/\.\.\./{\\u8212}/g if($ellipsis);
         #s/\.\.\./{\\ellipsis}/g if($ellipsis);
         s/\.\.\./{\\u8230\\'81}/g if($ellipsis);
-        if($use_firstletter and $firstletter) {
+        if($firstletter) {
             #die $_; yyy
             $firstletter = 0;
             #my $bfs = int($fs*1.5);
@@ -839,7 +812,7 @@ while(<$fdr>) {
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/\\dropcap2 $&/;
             #s/("|{\\ldblquote})?(\w|\{[^\}]*\})/{\\pvpara\\wraparound\\dropcapli2\\dropcapt1{$&}}/;
         }
-        die "bad encoding on line $. ($`)$&($'): $_" if ($_ =~ /[\x80-\xFF]/);
+        die "($`)$&($'): $_" if ($_ =~ /[\x80-\xFF]/);
         print $fdw $_;
     }
 }
@@ -859,10 +832,10 @@ if ($d[4] == 10) {
         my $mwcn = int($wday*$d[3]);
         $wday = int($wday);
         my $dwcn = $mwcn - $wcn;
-        #print "Nano: Word Count=$wcn + $dwcn = $mwcn, w/day=$wday for $count days\n";
+        print "Nano: Word Count=$wcn + $dwcn = $mwcn, w/day=$wday for $count days\n";
     }
     my $rem = $goal - $wcn;
-    #print("Nano: Remaining: $rem\n");
+    print("Nano: Remaining: $rem\n");
 }
 print "Chapters on: $chapters_on\n";
 print "Notes on: $notes_on\n";
@@ -873,7 +846,7 @@ sub startpar {
     $par = 1;
     #my $ind = sprintf("%d",$margins*720.0+0.5);
     my $ind = sprintf("%d",$indent*1440.0+0.5);
-    $ind = "" if($firstletter and $use_firstletter);
+    $ind = "" if($firstletter);
     printf $fdw "{\\pard\\fi$ind\\sl%d\\slmult1$main::tighten",240*$spacing;
 }
 sub endpar {
@@ -935,8 +908,6 @@ sub accent {
   $txt =~ s/ñ/\\u241\\'f1/g;
   $txt =~ s/ī/\\u299\\'ab/g;
   $txt =~ s/ć/\\u263\\'87/g;
-  $txt =~ s/Ö/\\u214\\'D6/g; # check
-  $txt =~ s/ö/\\u246\\'B6/g; # check
   # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
   $txt =~ s/<q>/qnum()/ge;
@@ -946,7 +917,6 @@ sub accent {
   $txt =~ s/\^\^/\\par}{\\pard    /g;
   $txt =~ s/“/"/g;
   $txt =~ s/”/"/g;
-  $txt =~ s/—/--/g;
 
   $txt =~ s/’/'/g;
   $txt =~ s/‘/'/g;
