@@ -1,9 +1,14 @@
+case $- in
+    *i*) ;;
+    *) return 0 2>/dev/null || exit 0 ;;
+esac
+
 TIMER_THING_HOST=$(hostname -s)
 TIMER_THING_CMD=""
 TIMER_THING_READY=0
 
 __timer_thing_set_title__() {
-    printf '\033]0;%s\007' "$1"
+    [ -t 1 ] && printf '\033]0;%s\007' "$1"
 }
 
 __timer_thing_start__() {
