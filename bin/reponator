@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""reponator: Show git status of all repos in a Cactus repos/ directory."""
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+# ANSI colors
+RED    = "\033[91m"
+GREEN  = "\033[92m"
+YELLOW = "\033[93m"
+CYAN   = "\033[96m"
+BOLD   = "\033[1m"
+RESET  = "\033[0m"
+
+USE_COLOR = sys.stdout.isatty()
+
+def c(color, text):
+    return f"{color}{text}{RESET}" if USE_COLOR else text
+
+def run(cmd, cwd=None):
+    try:
+        result = subprocess.run(
+            cmd, cwd=cwd, capture_output=True, text=True, timeout=30
+        )
+        return result.stdout.strip(), result.returncode
+    except Exception:
+        return "", 1
+
+def find_cactus_root():
+    """Walk up from cwd to find a directory containing a 'repos' subdirectory."""
+    p = Path.cwd()
+    for candidate in [p] + list(p.parents):
+        if (candidate / "repos").is_dir():
+            return candidate
+    return None
+
+# ---------------------------------------------------------------------------
+# Repo status mode
+# ---------------------------------------------------------------------------
+
+def repo_info(path):
+    name = path.name
+
+    branch, rc = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], path)
+    if rc != 0:
+        return name, None, None, None, None, None
+
+    upstream, rc_up = run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], path
+    )
+
+    ahead = behind = None
+    if rc_up == 0 and upstream:
+        ahead_str, _ = run(["git", "rev-list", "--count", f"{upstream}..HEAD"], path)
+        behind_str, _ = run(["git", "rev-list", "--count", f"HEAD..{upstream}"], path)
+        try:
+            ahead  = int(ahead_str)
+            behind = int(behind_str)
+        except ValueError:
+            pass
+
+    status_out, _ = run(["git", "status", "--porcelain"], path)
+    dirty = bool(status_out)
+
+    return name, branch, upstream if rc_up == 0 else None, ahead, behind, dirty
+
+def cmd_repos(cactus_root):
+    repos_dir = cactus_root / "repos"
+    repos = sorted(
+        [d for d in repos_dir.iterdir() if d.is_dir() and (d / ".git").exists()]
+    )
+
+    if not repos:
+        print(f"No git repos found in {repos_dir}")
+        return
+
+    name_w   = max(len(r.name) for r in repos)
+    branch_w = 20
+
+    print(c(BOLD, f"{'REPO':<{name_w}}  {'BRANCH':<{branch_w}}  {'REMOTE':<18}  STATUS"))
+    print("-" * (name_w + branch_w + 50))
+
+    for path in repos:
+        result = repo_info(path)
+        name = result[0]
+        if result[1] is None:
+            print(f"{name:<{name_w}}  {c(RED, '(not a git repo or error)')}")
+            continue
+
+        _, branch, upstream, ahead, behind, dirty = result
+
+        branch_disp = c(CYAN, f"{branch:<{branch_w}}")
+
+        if upstream is None:
+            remote_disp = c(YELLOW, f"{'no upstream':<18}")
+        elif ahead == 0 and behind == 0:
+            remote_disp = c(GREEN, f"{'up to date':<18}")
+        else:
+            parts = []
+            if ahead:
+                parts.append(f"+{ahead}")
+            if behind:
+                parts.append(f"-{behind}")
+            remote_disp = c(YELLOW, f"{' '.join(parts):<18}")
+
+        local_disp = c(RED, "modified") if dirty else c(GREEN, "clean")
+
+        print(f"{name:<{name_w}}  {branch_disp}  {remote_disp}  {local_disp}")
+
+# ---------------------------------------------------------------------------
+# ThornList comparison mode
+# ---------------------------------------------------------------------------
+
+MANIFEST_URL = "https://bitbucket.org/einsteintoolkit/manifest.git"
+MANIFEST_FILE = "einsteintoolkit.th"
+
+def is_thorn_line(s):
+    """True if the string looks like an Arrangement/ThornName entry."""
+    return "/" in s and " " not in s and s.count("/") == 1
+
+def parse_thorns(text):
+    """Extract active (uncommented) thorn entries from a thornlist."""
+    thorns = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("!"):
+            continue
+        if is_thorn_line(stripped):
+            thorns.add(stripped)
+    return thorns
+
+def parse_commented_thorns(text):
+    """Extract commented-out thorn entries, returning {thorn: original_line}."""
+    commented = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            candidate = stripped.lstrip("#").strip()
+            if is_thorn_line(candidate):
+                commented[candidate] = line
+    return commented
+
+def apply_updates(thornlist_path, to_uncomment, to_note):
+    """
+    Uncomment thorns in to_uncomment (set of thorn names).
+    to_note: thorns not found at all in the file — reported but not written.
+    Returns True if the file was modified.
+    """
+    lines = thornlist_path.read_text().splitlines(keepends=True)
+    new_lines = []
+    modified = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            candidate = stripped.lstrip("#").strip()
+            if candidate in to_uncomment and is_thorn_line(candidate):
+                # Preserve indentation prefix before the #, drop the # itself
+                prefix = line[: len(line) - len(line.lstrip())]
+                new_lines.append(f"{prefix}{candidate}\n")
+                modified = True
+                continue
+        new_lines.append(line)
+    if modified:
+        thornlist_path.write_text("".join(new_lines))
+    return modified
+
+def get_manifest_repo(cactus_root):
+    """Return Path to the local manifest repo, or None."""
+    p = cactus_root / "repos" / "manifest"
+    if p.is_dir() and (p / ".git").exists():
+        return p
+    return None
+
+def git_show(ref, filepath, repo_path):
+    """Return file content at a given git ref, or None on failure."""
+    text, rc = run(["git", "show", f"{ref}:{filepath}"], repo_path)
+    return text if rc == 0 else None
+
+def get_et_tags(repo_path):
+    """Return sorted list of ET_YYYY_MM_vN tags."""
+    out, _ = run(["git", "tag"], repo_path)
+    tags = [t for t in out.splitlines() if t.startswith("ET_")]
+    tags.sort()
+    return tags
+
+def manifest_status(repo_path):
+    """Return (branch, sha, describe, ahead, behind, dirty) for the manifest repo."""
+    branch, _  = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo_path)
+    sha, _     = run(["git", "rev-parse", "--short", "HEAD"], repo_path)
+    describe, rc = run(["git", "describe", "--tags", "--exact-match", "HEAD"], repo_path)
+    if rc != 0:
+        describe, _ = run(["git", "describe", "--tags", "HEAD"], repo_path)
+
+    upstream, rc_up = run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], repo_path
+    )
+    ahead = behind = None
+    if rc_up == 0:
+        a, _ = run(["git", "rev-list", "--count", f"{upstream}..HEAD"], repo_path)
+        b, _ = run(["git", "rev-list", "--count", f"HEAD..{upstream}"], repo_path)
+        try:
+            ahead, behind = int(a), int(b)
+        except ValueError:
+            pass
+
+    dirty_out, _ = run(["git", "status", "--porcelain"], repo_path)
+    dirty = bool(dirty_out)
+
+    return branch, sha, describe, ahead, behind, dirty
+
+def cmd_config(cactus_root, config_name):
+    thornlist_path = cactus_root / "configs" / config_name / "ThornList"
+    if not thornlist_path.exists():
+        print(f"Error: {thornlist_path} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    local_text = thornlist_path.read_text()
+    local_thorns = parse_thorns(local_text)
+    commented_thorns = parse_commented_thorns(local_text)
+
+    manifest_repo = get_manifest_repo(cactus_root)
+    if manifest_repo is None:
+        print(f"Error: manifest repo not found in {cactus_root / 'repos'}.", file=sys.stderr)
+        print(f"Clone it with: git clone {MANIFEST_URL} {cactus_root / 'repos' / 'manifest'}", file=sys.stderr)
+        sys.exit(1)
+
+    # Read einsteintoolkit.th from the manifest working tree (reflects local edits)
+    manifest_th = manifest_repo / MANIFEST_FILE
+    if not manifest_th.exists():
+        print(f"Error: {manifest_th} not found.", file=sys.stderr)
+        sys.exit(1)
+    ref_text   = manifest_th.read_text()
+    ref_thorns = parse_thorns(ref_text)
+
+    branch, sha, describe, ahead, behind, dirty = manifest_status(manifest_repo)
+
+    only_in_local = sorted(local_thorns - ref_thorns)
+    only_in_ref   = sorted(ref_thorns - local_thorns)
+    in_common     = len(local_thorns & ref_thorns)
+
+    # --- Header ---
+    print(c(BOLD, f"Config:    {config_name}"))
+    print(c(BOLD, f"ThornList: {thornlist_path}"))
+    print()
+
+    # --- Manifest repo status ---
+    print(c(BOLD, "Manifest repo (repos/manifest):"))
+    version_str = c(CYAN, describe) if describe else c(CYAN, sha)
+    print(f"  Version: {version_str}  branch: {c(CYAN, branch)}  commit: {sha}")
+
+    if ahead is not None and behind is not None:
+        if ahead == 0 and behind == 0:
+            sync = c(GREEN, "up to date with remote")
+        else:
+            parts = []
+            if ahead:
+                parts.append(f"+{ahead} ahead")
+            if behind:
+                parts.append(f"-{behind} behind")
+            sync = c(YELLOW, ", ".join(parts))
+        print(f"  Remote:  {sync}")
+
+    if dirty:
+        print(f"  Local changes: {c(YELLOW, 'yes — einsteintoolkit.th may differ from committed version')}")
+    else:
+        print(f"  Local changes: {c(GREEN, 'none')}")
+
+    print()
+    print(c(BOLD, f"Differences from manifest einsteintoolkit.th:"))
+    print(f"  ThornList thorns: {len(local_thorns)}   Manifest thorns: {len(ref_thorns)}   In common: {in_common}")
+    print()
+
+    if only_in_local:
+        print(c(BOLD, f"  In ThornList but not in manifest ({len(only_in_local)}):"))
+        for t in only_in_local:
+            print(f"    {c(GREEN, '+ ' + t)}")
+    else:
+        print(f"  {c(GREEN, 'No thorns in ThornList that are absent from manifest.')}")
+
+    print()
+
+    if only_in_ref:
+        print(c(BOLD, f"  In manifest but not in ThornList ({len(only_in_ref)}):"))
+        for t in only_in_ref:
+            can_uncomment = t in commented_thorns
+            tag = c(YELLOW, "(commented out)") if can_uncomment else c(RED, "(not in file)")
+            print(f"    {c(RED, '- ' + t)}  {tag}")
+    else:
+        print(f"  {c(GREEN, 'No thorns in manifest that are absent from ThornList.')}")
+
+    # Offer update if there is anything to fix
+    if not only_in_ref:
+        return
+
+    to_uncomment    = {t for t in only_in_ref if t in commented_thorns}
+    to_add_manually = [t for t in only_in_ref if t not in commented_thorns]
+
+    print()
+    if to_uncomment:
+        print(f"  {len(to_uncomment)} thorn(s) can be enabled by uncommenting them in the ThornList.")
+    if to_add_manually:
+        print(f"  {len(to_add_manually)} thorn(s) are not present in the ThornList at all and must be added manually.")
+
+    if not to_uncomment:
+        return
+
+    print()
+    try:
+        answer = input("  Update ThornList now? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+
+    if answer != "y":
+        return
+
+    apply_updates(thornlist_path, to_uncomment, to_add_manually)
+    print(c(GREEN, f"  Updated: uncommented {len(to_uncomment)} thorn(s)."))
+    if to_add_manually:
+        print(c(YELLOW, "  The following still need to be added manually:"))
+        for t in sorted(to_add_manually):
+            print(f"    {t}")
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="reponator",
+        description="Show git repo status or compare ThornList against ET master.",
+    )
+    parser.add_argument(
+        "--config", metavar="NAME",
+        help="Compare configs/NAME/ThornList against einsteintoolkit.th master",
+    )
+    args = parser.parse_args()
+
+    cactus_root = find_cactus_root()
+    if cactus_root is None:
+        print("Error: could not find a 'repos' directory from the current location.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.config:
+        cmd_config(cactus_root, args.config)
+    else:
+        cmd_repos(cactus_root)
+
+if __name__ == "__main__":
+    main()
