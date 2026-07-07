@@ -755,7 +755,7 @@ class TUI:
                 stdscr.attron(curses.color_pair(cpair) | curses.A_BOLD)
                 stdscr.addstr(ch)
                 stdscr.attroff(curses.color_pair(cpair) | curses.A_BOLD)
-                stdscr.addstr(row, 4, f"] {name_col} {test_info}"[:w - 5])
+                stdscr.addstr(row, 4, f"] {name_col} {test_info}{_clock_indicator(thorn.elapsed)}"[:w - 5])
             except curses.error:
                 pass
 
