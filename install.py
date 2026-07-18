@@ -150,16 +150,13 @@ export HISTIGNORE="cd:pwd:ls:exit:clear:history*:#*"
 # append to the history file, don't overwrite it
 shopt -s histappend
 
-# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
-export HISTSIZE=10000
-export HISTFILESIZE=20000
+# Unlimited in-memory and on-disk history (bash 4.3+: negative = no limit)
+export HISTSIZE=-1
+export HISTFILESIZE=-1
 
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
 #shopt -s checkwinsize
-
-# Find out more about prompt command
-#export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"
 
 alias envup='(cd "$WORKENV_ROOT" && git pull && ./install.sh) ; source ~/.bashrc'
 alias git-clear-passwd='git config --global credential.helper store'
@@ -183,6 +180,14 @@ then
 elif command -v long-cmd-notify.sh >/dev/null 2>&1
 then
     source long-cmd-notify.sh
+fi
+
+# Share history across live shells on this machine:
+#   history -a  append this shell's new lines to ~/.bash_history
+#   history -n  pull lines written by other shells into this session
+# Chained after long-cmd-notify so its exit-code-aware PROMPT_COMMAND runs first.
+if [[ "${{PROMPT_COMMAND:-}}" != *"history -a"* ]]; then
+  PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}history -a; history -n"
 fi
 """.format(here=here), file=fd)
 
