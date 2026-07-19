@@ -11,10 +11,24 @@ __timer_thing_set_title__() {
     [ -t 1 ] && printf '\033]0;%s\007' "$1"
 }
 
+# Commands that are prompt/plumbing, not user work — never show the hourglass for these.
+__timer_thing_is_internal__() {
+    case "${BASH_COMMAND}" in
+        __timer_thing_end__|__timer_thing_start__|__timer_thing_set_title__|__timer_thing_is_internal__|__workenv_prompt_command__)
+            return 0
+            ;;
+    esac
+    # PROMPT_COMMAND as a single function name (no ';') should not count as a running command.
+    if [ -n "${PROMPT_COMMAND:-}" ] && [ "${BASH_COMMAND}" = "${PROMPT_COMMAND}" ]; then
+        return 0
+    fi
+    return 1
+}
+
 __timer_thing_start__() {
     if [ $TIMER_THING_READY = 0 ]
     then
-        if [ "${BASH_COMMAND}" != "__timer_thing_end__" ]
+        if ! __timer_thing_is_internal__
         then
             TIMER_THING_CMD="${BASH_COMMAND}"
             TIMER_THING_READY=1

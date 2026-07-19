@@ -185,10 +185,16 @@ fi
 # Share history across live shells on this machine:
 #   history -a  append this shell's new lines to ~/.bash_history
 #   history -n  pull lines written by other shells into this session
-# Chained after long-cmd-notify so its exit-code-aware PROMPT_COMMAND runs first.
-if [[ "${{PROMPT_COMMAND:-}}" != *"history -a"* ]]; then
-  PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}history -a; history -n"
-fi
+# One PROMPT_COMMAND function so the DEBUG tab-title trap does not treat
+# "history -a" as a user command (which left the hourglass stuck).
+__workenv_prompt_command__() {{
+  if declare -F __timer_thing_end__ >/dev/null 2>&1; then
+    __timer_thing_end__
+  fi
+  history -a
+  history -n
+}}
+PROMPT_COMMAND=__workenv_prompt_command__
 """.format(here=here), file=fd)
 
 vimrc = os.path.join(home, ".vimrc")
