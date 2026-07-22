@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a modern Vim into the arch-specific workenv prefix (no root), and
+# Build a modern Vim into the platform-specific workenv prefix (no root), and
 # install vim-plug + a clangd-friendly coc setup helpers.
 #
 # Usage:
@@ -7,6 +7,8 @@
 #   mk-vim.sh --force
 #   MIN_VIM=9.1 mk-vim.sh
 #   SKIP_CLANGD=1 mk-vim.sh
+#
+# Installs to: $WORKENV_ROOT/$WORKENV_PLATFORM  (see workenv-platform.sh)
 
 set -euo pipefail
 
@@ -19,8 +21,9 @@ NPROC="${NPROC:-$(nproc 2>/dev/null || echo 2)}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKENV_ROOT="${WORKENV_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-ARCH="$(uname -m)"
-PREFIX="${PREFIX:-$WORKENV_ROOT/$ARCH}"
+# shellcheck source=workenv-platform.sh
+. "$SCRIPT_DIR/workenv-platform.sh"
+PREFIX="${PREFIX:-$WORKENV_ROOT/$WORKENV_PLATFORM}"
 
 for arg in "$@"; do
   case "$arg" in

@@ -12,14 +12,16 @@
 # Layout:
 #   $WORKENV_ROOT/bin              portable scripts (this repo)
 #   $WORKENV_ROOT/py               portable Python modules
-#   $WORKENV_ROOT/$(uname -m)/     arch-specific toolchain (python, vim, clangd, libs)
+#   $WORKENV_ROOT/$WORKENV_PLATFORM/  platform toolchain (python, vim, clangd, libs)
+#     e.g. x86_64-glibc-2.35/  — arch + libc so host vs container do not clash
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export WORKENV_ROOT="$ROOT"
-ARCH="$(uname -m)"
-export PREFIX="${PREFIX:-$ROOT/$ARCH}"
+# shellcheck source=bin/workenv-platform.sh
+. "$ROOT/bin/workenv-platform.sh"
+export PREFIX="${PREFIX:-$ROOT/$WORKENV_PLATFORM}"
 
 FORCE_PYTHON=0
 SKIP_PYTHON=0
@@ -50,7 +52,7 @@ chmod +x "$ROOT/bin/mk-python.sh" "$ROOT/bin/mk-vim.sh" 2>/dev/null || true
 
 # --- Python ---
 if [[ "$SKIP_PYTHON" -eq 0 ]]; then
-  log "Ensuring Python (arch=$ARCH, prefix=$PREFIX)"
+  log "Ensuring Python (platform=$WORKENV_PLATFORM, prefix=$PREFIX)"
   MK_PY_ARGS=()
   [[ "$FORCE_PYTHON" -eq 1 ]] && MK_PY_ARGS+=(--force)
   # Prefer a faster first build on slow filesystems unless user opts in
@@ -61,21 +63,24 @@ else
   log "Skipping Python (--skip-python)"
 fi
 
-# Prefer arch python for the rest of the install
+# Prefer platform python for the rest of the install
 if [[ -x "$PREFIX/bin/python3.13" ]]; then
   PY="$PREFIX/bin/python3.13"
 elif [[ -x "$PREFIX/bin/python3" ]]; then
   PY="$PREFIX/bin/python3"
 elif command -v python3 >/dev/null 2>&1; then
   PY="$(command -v python3)"
-  log "WARNING: using system $PY (arch Python not found at $PREFIX)"
+  log "WARNING: using system $PY (platform Python not found at $PREFIX)"
 else
   die "no python3 available; re-run without --skip-python"
 fi
 
-# Arch bin before portable scripts (avoid shadowing by legacy bin/python)
+# Platform bin before portable scripts (avoid shadowing by legacy bin/python)
 export PATH="$PREFIX/bin:$ROOT/bin:$PATH"
 export LD_LIBRARY_PATH="$PREFIX/lib:${PREFIX}/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Keep pip --user installs off the shared ~/.local tree
+export PYTHONUSERBASE="${PYTHONUSERBASE:-$HOME/.local/$WORKENV_PLATFORM}"
+export PATH="$PATH:$PYTHONUSERBASE/bin"
 
 # Quick health report
 if "$PY" -c 'import _ctypes' 2>/dev/null; then

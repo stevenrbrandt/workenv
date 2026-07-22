@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Python into an arch-specific prefix under workenv (no root required).
+# Build Python into a platform-specific prefix under workenv (no root required).
 # Fixes missing _ctypes by ensuring libffi is available (system or built into prefix).
 #
 # Usage:
@@ -8,7 +8,8 @@
 #   PY_VER=3.13.14 mk-python.sh
 #   PYTHON_OPTIMIZE=0 mk-python.sh   # skip PGO (much faster)
 #
-# Installs to: $WORKENV_ROOT/$(uname -m)   e.g. ~/workenv/x86_64
+# Installs to: $WORKENV_ROOT/$WORKENV_PLATFORM
+#   e.g. ~/workenv/x86_64-glibc-2.35  (arch + libc; see workenv-platform.sh)
 
 set -euo pipefail
 
@@ -22,8 +23,9 @@ NPROC="${NPROC:-$(nproc 2>/dev/null || echo 2)}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKENV_ROOT="${WORKENV_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-ARCH="$(uname -m)"
-PREFIX="${PREFIX:-$WORKENV_ROOT/$ARCH}"
+# shellcheck source=workenv-platform.sh
+. "$SCRIPT_DIR/workenv-platform.sh"
+PREFIX="${PREFIX:-$WORKENV_ROOT/$WORKENV_PLATFORM}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -77,7 +79,7 @@ TARGET_PY="$PREFIX/bin/python${PY_MM}"
 
 if [[ "$FORCE" -eq 0 ]] && python_smoke "$TARGET_PY"; then
   log "Python $PY_VER already OK at $TARGET_PY (including _ctypes)"
-  # Keep convenience symlinks inside the arch prefix
+  # Keep convenience symlinks inside the platform prefix
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python"
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python3"
   if [[ -x "$PREFIX/bin/pip${PY_MM}" ]]; then
@@ -203,7 +205,7 @@ make -j"$NPROC"
 log "Installing (make altinstall) ..."
 make altinstall
 
-# Symlinks inside arch prefix only (portable scripts stay in $WORKENV_ROOT/bin)
+# Symlinks inside platform prefix only (portable scripts stay in $WORKENV_ROOT/bin)
 ln -sfn "python${PY_MM}" "$PREFIX/bin/python"
 ln -sfn "python${PY_MM}" "$PREFIX/bin/python3"
 if [[ -x "$PREFIX/bin/pip${PY_MM}" ]]; then
@@ -230,4 +232,4 @@ PY
 
 log "SUCCESS: Python $PY_VER -> $PREFIX"
 log "  $TARGET_PY"
-log "  Add to PATH via install.sh / ~/.bashaux (arch prefix: $ARCH)"
+log "  Add to PATH via install.sh / ~/.bashaux (platform prefix: $WORKENV_PLATFORM)"

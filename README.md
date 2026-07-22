@@ -5,7 +5,7 @@ This is just a convenience that I use to set up my home directory, favorite scri
 ## Install
 
 ```bash
-# Bootstrap Python 3.13.14 (arch-specific, with _ctypes), optional vim/clangd, then dotfiles:
+# Bootstrap Python 3.13.14 (platform-specific, with _ctypes), optional vim/clangd, then dotfiles:
 ./install.sh
 
 # Faster Python build (skip PGO):
@@ -20,7 +20,9 @@ PYTHON_OPTIMIZE=0 ./install.sh
 Layout:
 
 - `bin/`, `py/` — portable scripts and modules (this repo)
-- `$(uname -m)/` — e.g. `x86_64/` — arch-specific Python, vim, clangd, libs
+- `$WORKENV_PLATFORM/` — e.g. `x86_64-glibc-2.35/` — Python, vim, clangd, libs  
+  (`$(uname -m)-$(getconf GNU_LIBC_VERSION | sed 's/ /-/g')`; see `bin/workenv-platform.sh`)
+- `~/.local/$WORKENV_PLATFORM/` — `pip install --user` / `PYTHONUSERBASE` (keeps native wheels per libc)
 
 Shell config is written to `~/.bashaux` (sourced from `~/.bashrc`). Refresh with `envup` or re-run `./install.sh`.
 
