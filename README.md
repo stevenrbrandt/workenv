@@ -15,6 +15,11 @@ PYTHON_OPTIMIZE=0 ./install.sh
 ./install.sh --force-python   # rebuild Python even if smoke tests pass
 ./install.sh --skip-vim
 ./install.sh --skip-python    # only run install.py (needs an existing python3)
+
+# Python SSL (pip HTTPS): mk-python uses system OpenSSL if present, otherwise
+# builds it into the platform prefix. For apptainer/cluster when the image has
+# no libssl, prefer a self-contained build:
+OPENSSL_BUNDLE=1 PYTHON_OPTIMIZE=0 ./install.sh --force-python
 ```
 
 Layout:

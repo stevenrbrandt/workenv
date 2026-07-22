@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Build Python into a platform-specific prefix under workenv (no root required).
-# Fixes missing _ctypes by ensuring libffi is available (system or built into prefix).
+# Ensures libffi (_ctypes) and OpenSSL (ssl / pip HTTPS) — system or built into prefix.
 #
 # Usage:
 #   mk-python.sh              # install PY_VER (default 3.13.14) if needed
 #   mk-python.sh --force      # rebuild even if smoke tests pass
 #   PY_VER=3.13.14 mk-python.sh
 #   PYTHON_OPTIMIZE=0 mk-python.sh   # skip PGO (much faster)
+#   OPENSSL_BUNDLE=1 mk-python.sh    # always build OpenSSL into prefix (portable)
 #
 # Installs to: $WORKENV_ROOT/$WORKENV_PLATFORM
 #   e.g. ~/workenv/x86_64-glibc-2.35  (arch + libc; see workenv-platform.sh)
@@ -18,8 +19,14 @@ PY_MM="${PY_VER%.*}"          # 3.13
 FORCE=0
 PYTHON_OPTIMIZE="${PYTHON_OPTIMIZE:-1}"
 LIBFFI_VER="${LIBFFI_VER:-3.4.6}"
+# OpenSSL 3.0 LTS — good default for Python 3.11+ and cluster portability
+OPENSSL_VER="${OPENSSL_VER:-3.0.15}"
+# 1 = always build OpenSSL into PREFIX (recommended for apptainer/home-on-cluster)
+OPENSSL_BUNDLE="${OPENSSL_BUNDLE:-0}"
 BUILD_ROOT="${BUILD_ROOT:-/tmp/workenv-python-build-$$}"
 NPROC="${NPROC:-$(nproc 2>/dev/null || echo 2)}"
+# Set by ensure_openssl: directory passed to Python --with-openssl=
+OPENSSL_DIR=""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKENV_ROOT="${WORKENV_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -31,7 +38,7 @@ for arg in "$@"; do
   case "$arg" in
     --force|-f) FORCE=1 ;;
     --help|-h)
-      sed -n '2,16p' "$0"
+      sed -n '2,14p' "$0"
       exit 0
       ;;
     *)
@@ -71,14 +78,16 @@ python_smoke() {
   local got
   got="$("$py" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null)" || return 1
   [[ "$got" == "$PY_VER" ]] || return 1
-  "$py" -c 'import _ctypes' 2>/dev/null || return 1
+  # _ctypes (libffi) and ssl (OpenSSL) — both needed for a usable pip on clusters
+  "$py" -c 'import _ctypes, ssl; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
   return 0
 }
 
 TARGET_PY="$PREFIX/bin/python${PY_MM}"
 
 if [[ "$FORCE" -eq 0 ]] && python_smoke "$TARGET_PY"; then
-  log "Python $PY_VER already OK at $TARGET_PY (including _ctypes)"
+  log "Python $PY_VER already OK at $TARGET_PY (including _ctypes + ssl)"
+  log "  ssl: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
   # Keep convenience symlinks inside the platform prefix
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python"
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python3"
@@ -153,6 +162,106 @@ ensure_libffi() {
 
 ensure_libffi
 
+# --- OpenSSL (required for ssl module / pip HTTPS, e.g. inside apptainer) ---
+openssl_usable() {
+  # Prefer a prefix we already installed into
+  if [[ -r "$PREFIX/include/openssl/ssl.h" ]] && \
+     { [[ -e "$PREFIX/lib/libssl.so" ]] || [[ -e "$PREFIX/lib64/libssl.so" ]] || \
+       ls "$PREFIX"/lib/libssl.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libssl.so* >/dev/null 2>&1; }; then
+    return 0
+  fi
+  if have pkg-config && pkg-config --exists openssl; then
+    return 0
+  fi
+  cat >"$BUILD_ROOT/ssl_probe.c" <<'EOF'
+#include <openssl/ssl.h>
+#include <openssl/opensslv.h>
+int main(void) {
+  return (OPENSSL_VERSION_NUMBER > 0) ? 0 : 1;
+}
+EOF
+  # shellcheck disable=SC2086
+  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/ssl_probe.c" -lssl -lcrypto -o "$BUILD_ROOT/ssl_probe" 2>/dev/null
+}
+
+build_openssl_into_prefix() {
+  log "Building OpenSSL $OPENSSL_VER into $PREFIX (no root; portable for apptainer)"
+  need_cmds perl
+  local tarball="openssl-${OPENSSL_VER}.tar.gz"
+  # github mirror is reliable; official source is also fine
+  local url="https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VER}/${tarball}"
+  local url_alt="https://www.openssl.org/source/${tarball}"
+  cd "$BUILD_ROOT"
+  if ! download "$url" "$tarball"; then
+    log "primary OpenSSL URL failed; trying openssl.org"
+    download "$url_alt" "$tarball" || die "failed to download OpenSSL $OPENSSL_VER"
+  fi
+  tar -xzf "$tarball"
+  cd "openssl-${OPENSSL_VER}"
+  # shared libs; rpath so _ssl finds them when only $PREFIX is visible (apptainer)
+  local cfg=(--prefix="$PREFIX" --openssldir="$PREFIX/ssl" shared)
+  cat >"$BUILD_ROOT/zlib_probe.c" <<'ZEOF'
+#include <zlib.h>
+int main(void){return 0;}
+ZEOF
+  # shellcheck disable=SC2086
+  if cc $CPPFLAGS -c "$BUILD_ROOT/zlib_probe.c" -o "$BUILD_ROOT/zlib_probe.o" 2>/dev/null; then
+    cfg+=(zlib)
+  fi
+  ./Configure "${cfg[@]}" \
+    "-Wl,-rpath,$PREFIX/lib" "-Wl,-rpath,$PREFIX/lib64"
+  make -j"$NPROC"
+  # libs + headers only (skip man pages)
+  make install_sw
+  export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+  export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+  openssl_usable || die "OpenSSL still not usable after local build"
+  log "OpenSSL installed to $PREFIX"
+}
+
+ensure_openssl() {
+  OPENSSL_DIR=""
+
+  if [[ "$OPENSSL_BUNDLE" == "1" ]]; then
+    log "OPENSSL_BUNDLE=1 — building OpenSSL into prefix even if system has it"
+    build_openssl_into_prefix
+    OPENSSL_DIR="$PREFIX"
+    return 0
+  fi
+
+  if openssl_usable; then
+    if [[ -r "$PREFIX/include/openssl/ssl.h" ]]; then
+      log "OpenSSL available in prefix $PREFIX"
+      OPENSSL_DIR="$PREFIX"
+    elif have pkg-config && pkg-config --exists openssl; then
+      log "OpenSSL available (system): $(pkg-config --modversion openssl)"
+      local cflags libs pref
+      cflags="$(pkg-config --cflags openssl 2>/dev/null || true)"
+      libs="$(pkg-config --libs openssl 2>/dev/null || true)"
+      pref="$(pkg-config --variable=prefix openssl 2>/dev/null || true)"
+      export CPPFLAGS="$cflags $CPPFLAGS"
+      export LDFLAGS="$libs $LDFLAGS"
+      # Python --with-openssl wants a root that contains include/ and lib/
+      if [[ -n "$pref" && -r "$pref/include/openssl/ssl.h" ]]; then
+        OPENSSL_DIR="$pref"
+      else
+        OPENSSL_DIR="/usr"
+      fi
+    else
+      log "OpenSSL available via compiler default paths"
+      OPENSSL_DIR="/usr"
+    fi
+    return 0
+  fi
+
+  build_openssl_into_prefix
+  OPENSSL_DIR="$PREFIX"
+}
+
+ensure_openssl
+[[ -n "$OPENSSL_DIR" ]] || die "OPENSSL_DIR unset after ensure_openssl"
+
 # Helpful optional deps (warn only — do not fail the build)
 warn_missing_headers() {
   local name="$1" header="$2"
@@ -164,7 +273,6 @@ EOF
     log "WARNING: $name headers not found ($header) — related Python modules may be omitted"
   fi
 }
-warn_missing_headers "OpenSSL" "openssl/ssl.h"
 warn_missing_headers "zlib" "zlib.h"
 warn_missing_headers "SQLite3" "sqlite3.h"
 warn_missing_headers "readline" "readline/readline.h"
@@ -185,6 +293,9 @@ CONFIG_ARGS=(
   --enable-shared
   --with-ensurepip=install
   --with-system-ffi
+  --with-openssl="$OPENSSL_DIR"
+  # Embed rpath so _ssl finds libssl inside apptainer when only $PREFIX is bound
+  --with-openssl-rpath=auto
 )
 
 if [[ "$PYTHON_OPTIMIZE" == "1" ]]; then
@@ -194,7 +305,7 @@ else
   log "Configuring without PGO optimizations"
 fi
 
-log "configure --prefix=$PREFIX ..."
+log "configure --prefix=$PREFIX --with-openssl=$OPENSSL_DIR ..."
 ./configure "${CONFIG_ARGS[@]}" \
   CPPFLAGS="$CPPFLAGS" \
   LDFLAGS="$LDFLAGS"
@@ -213,9 +324,12 @@ if [[ -x "$PREFIX/bin/pip${PY_MM}" ]]; then
   ln -sfn "pip${PY_MM}" "$PREFIX/bin/pip3"
 fi
 
-# --- Verify _ctypes ---
+# --- Verify required modules ---
 if ! "$TARGET_PY" -c 'import _ctypes; print("_ctypes OK:", _ctypes.__file__)'; then
   die "Python installed but _ctypes still missing. Check libffi / config.log in $BUILD_ROOT"
+fi
+if ! "$TARGET_PY" -c 'import ssl; print("ssl OK:", ssl.OPENSSL_VERSION, ssl.__file__)'; then
+  die "Python installed but ssl still missing. Check OpenSSL / --with-openssl=$OPENSSL_DIR / config.log"
 fi
 
 # Report other modules
@@ -232,4 +346,5 @@ PY
 
 log "SUCCESS: Python $PY_VER -> $PREFIX"
 log "  $TARGET_PY"
+log "  OpenSSL: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
 log "  Add to PATH via install.sh / ~/.bashaux (platform prefix: $WORKENV_PLATFORM)"
