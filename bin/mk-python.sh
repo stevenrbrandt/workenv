@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build Python into a platform-specific prefix under workenv (no root required).
-# Ensures libffi (_ctypes) and OpenSSL (ssl / pip HTTPS) — system or built into prefix.
+# Ensures libffi (_ctypes), OpenSSL (ssl / pip HTTPS), and liblzma (_lzma) —
+# system or built into prefix.
 #
 # Usage:
 #   mk-python.sh              # install PY_VER (default 3.13.14) if needed
@@ -23,6 +24,8 @@ LIBFFI_VER="${LIBFFI_VER:-3.4.6}"
 OPENSSL_VER="${OPENSSL_VER:-3.0.15}"
 # 1 = always build OpenSSL into PREFIX (recommended for apptainer/home-on-cluster)
 OPENSSL_BUNDLE="${OPENSSL_BUNDLE:-0}"
+# liblzma / xz (Python _lzma module — required by nrpy and many scientific packages)
+XZ_VER="${XZ_VER:-5.6.3}"
 BUILD_ROOT="${BUILD_ROOT:-/tmp/workenv-python-build-$$}"
 NPROC="${NPROC:-$(nproc 2>/dev/null || echo 2)}"
 # Set by ensure_openssl: directory passed to Python --with-openssl=
@@ -150,15 +153,15 @@ python_smoke() {
   local got
   got="$("$py" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null)" || return 1
   [[ "$got" == "$PY_VER" ]] || return 1
-  # _ctypes (libffi) and ssl (OpenSSL) — both needed for a usable pip on clusters
-  "$py" -c 'import _ctypes, ssl; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
+  # _ctypes, ssl, lzma — needed for pip, HTTPS, and packages like nrpy
+  "$py" -c 'import _ctypes, ssl, lzma; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
   return 0
 }
 
 TARGET_PY="$PREFIX/bin/python${PY_MM}"
 
 if [[ "$FORCE" -eq 0 ]] && python_smoke "$TARGET_PY"; then
-  log "Python $PY_VER already OK at $TARGET_PY (including _ctypes + ssl)"
+  log "Python $PY_VER already OK at $TARGET_PY (including _ctypes + ssl + lzma)"
   log "  ssl: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
   # Keep convenience symlinks inside the platform prefix
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python"
@@ -334,6 +337,70 @@ ensure_openssl() {
 ensure_openssl
 [[ -n "$OPENSSL_DIR" ]] || die "OPENSSL_DIR unset after ensure_openssl"
 
+# --- liblzma / xz (required for Python _lzma — used by nrpy, etc.) ---
+lzma_usable() {
+  if [[ -r "$PREFIX/include/lzma.h" ]] && \
+     { [[ -e "$PREFIX/lib/liblzma.so" ]] || [[ -e "$PREFIX/lib64/liblzma.so" ]] || \
+       ls "$PREFIX"/lib/liblzma.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/liblzma.so* >/dev/null 2>&1; }; then
+    return 0
+  fi
+  if have pkg-config && pkg-config --exists liblzma; then
+    return 0
+  fi
+  cat >"$BUILD_ROOT/lzma_probe.c" <<'EOF'
+#include <lzma.h>
+int main(void) {
+  return (LZMA_VERSION > 0) ? 0 : 1;
+}
+EOF
+  # shellcheck disable=SC2086
+  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/lzma_probe.c" -llzma -o "$BUILD_ROOT/lzma_probe" 2>/dev/null
+}
+
+ensure_liblzma() {
+  if lzma_usable; then
+    log "liblzma available (system or prefix)"
+    if have pkg-config && pkg-config --exists liblzma; then
+      log "  pkg-config liblzma: $(pkg-config --modversion liblzma)"
+      local cflags libs
+      cflags="$(pkg-config --cflags liblzma 2>/dev/null || true)"
+      libs="$(pkg-config --libs liblzma 2>/dev/null || true)"
+      export CPPFLAGS="$cflags $CPPFLAGS"
+      export LDFLAGS="$libs $LDFLAGS"
+    elif [[ -r "$PREFIX/include/lzma.h" ]]; then
+      export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+      export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+    fi
+    return 0
+  fi
+
+  log "liblzma not found; building xz $XZ_VER into $PREFIX (no root)"
+  local tarball="xz-${XZ_VER}.tar.gz"
+  local url="https://github.com/tukaani-project/xz/releases/download/v${XZ_VER}/${tarball}"
+  local url_alt="https://github.com/tukaani-project/xz/releases/download/v${XZ_VER}/xz-${XZ_VER}.tar.xz"
+  cd "$BUILD_ROOT"
+  if ! download "$url" "$tarball"; then
+    log "primary xz URL failed; trying .tar.xz release asset name"
+    tarball="xz-${XZ_VER}.tar.xz"
+    download "$url_alt" "$tarball" || die "failed to download xz $XZ_VER"
+  fi
+  tar -xf "$tarball"
+  cd "xz-${XZ_VER}"
+  # Libraries only (headers + liblzma); skip CLI tools / docs
+  ./configure --prefix="$PREFIX" --disable-doc --disable-scripts \
+    --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-lzma-links \
+    --enable-shared
+  make -j"$NPROC"
+  make install
+  export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+  export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+  lzma_usable || die "liblzma still not usable after local build"
+  log "liblzma installed to $PREFIX"
+}
+
+ensure_liblzma
+
 # Helpful optional deps (warn only — do not fail the build)
 warn_missing_headers() {
   local name="$1" header="$2"
@@ -349,7 +416,6 @@ warn_missing_headers "zlib" "zlib.h"
 warn_missing_headers "SQLite3" "sqlite3.h"
 warn_missing_headers "readline" "readline/readline.h"
 warn_missing_headers "bzip2" "bzlib.h"
-warn_missing_headers "xz/lzma" "lzma.h"
 
 # --- Python source ---
 TARBALL="Python-${PY_VER}.tar.xz"
@@ -403,6 +469,9 @@ fi
 if ! "$TARGET_PY" -c 'import ssl; print("ssl OK:", ssl.OPENSSL_VERSION, ssl.__file__)'; then
   die "Python installed but ssl still missing. Check OpenSSL / --with-openssl=$OPENSSL_DIR / config.log"
 fi
+if ! "$TARGET_PY" -c 'import lzma; print("lzma OK:", lzma.__file__)'; then
+  die "Python installed but _lzma still missing. Check liblzma / xz headers and config.log in $BUILD_ROOT"
+fi
 
 # Report other modules
 "$TARGET_PY" - <<'PY'
@@ -419,4 +488,5 @@ PY
 log "SUCCESS: Python $PY_VER -> $PREFIX"
 log "  $TARGET_PY"
 log "  OpenSSL: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
+log "  lzma: OK"
 log "  Add to PATH via install.sh / ~/.bashaux (platform prefix: $WORKENV_PLATFORM)"

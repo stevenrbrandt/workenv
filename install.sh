@@ -7,7 +7,11 @@
 #   ./install.sh --force-python
 #   ./install.sh --skip-vim
 #   ./install.sh --skip-python
+#   ./install.sh -y                 # no prompts (install everything)
 #   PY_VER=3.13.14 PYTHON_OPTIMIZE=0 ./install.sh
+#
+# Interactive (TTY): prompts before Python and Vim builds unless flags/-y say otherwise.
+# Non-interactive: skips Python and Vim unless --force-python / -y (or WORKENV_YES=1).
 #
 # Layout:
 #   $WORKENV_ROOT/bin              portable scripts (this repo)
@@ -27,6 +31,8 @@ FORCE_PYTHON=0
 SKIP_PYTHON=0
 SKIP_VIM=0
 SKIP_DOTFILES=0
+ASSUME_YES=0
+[[ "${WORKENV_YES:-0}" == "1" ]] && ASSUME_YES=1
 
 for arg in "$@"; do
   case "$arg" in
@@ -34,8 +40,9 @@ for arg in "$@"; do
     --skip-python)  SKIP_PYTHON=1 ;;
     --skip-vim)     SKIP_VIM=1 ;;
     --skip-dotfiles) SKIP_DOTFILES=1 ;;
+    -y|--yes)       ASSUME_YES=1 ;;
     --help|-h)
-      sed -n '2,18p' "$0"
+      sed -n '2,20p' "$0"
       exit 0
       ;;
     *)
@@ -48,9 +55,37 @@ done
 log() { printf '==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+# Prompt on the real terminal (works even if stdin is not a TTY).
+# Default n: empty answer / unknown → no. Returns 0=yes, 1=no.
+confirm_install() {
+  local prompt="$1"
+  local ans=""
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    return 0
+  fi
+  if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
+    log "No TTY for prompt — skipping: $prompt"
+    return 1
+  fi
+  # Write prompt and read answer on /dev/tty so envup/ssh/IDE cannot swallow it
+  printf '%s [y/N] ' "$prompt" > /dev/tty
+  read -r ans < /dev/tty || ans=""
+  case "$ans" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 chmod +x "$ROOT/bin/mk-python.sh" "$ROOT/bin/mk-vim.sh" 2>/dev/null || true
 
 # --- Python ---
+# Explicit flags win; otherwise ask (or skip if non-interactive).
+if [[ "$SKIP_PYTHON" -eq 0 && "$FORCE_PYTHON" -eq 0 ]]; then
+  if ! confirm_install "Install/ensure platform Python ($PREFIX)?"; then
+    SKIP_PYTHON=1
+  fi
+fi
+
 if [[ "$SKIP_PYTHON" -eq 0 ]]; then
   log "Ensuring Python (platform=$WORKENV_PLATFORM, prefix=$PREFIX)"
   MK_PY_ARGS=()
@@ -60,7 +95,7 @@ if [[ "$SKIP_PYTHON" -eq 0 ]]; then
   export PYTHON_OPTIMIZE
   "$ROOT/bin/mk-python.sh" "${MK_PY_ARGS[@]+"${MK_PY_ARGS[@]}"}"
 else
-  log "Skipping Python (--skip-python)"
+  log "Skipping Python"
 fi
 
 # Prefer platform python for the rest of the install
@@ -91,10 +126,15 @@ fi
 
 # --- Vim / clangd ---
 if [[ "$SKIP_VIM" -eq 0 ]]; then
+  if ! confirm_install "Install/ensure Vim + clangd helpers ($PREFIX)?"; then
+    SKIP_VIM=1
+  fi
+fi
+if [[ "$SKIP_VIM" -eq 0 ]]; then
   log "Ensuring Vim + clangd helpers"
   "$ROOT/bin/mk-vim.sh" || log "WARNING: mk-vim.sh had errors (continuing)"
 else
-  log "Skipping Vim (--skip-vim)"
+  log "Skipping Vim"
 fi
 
 # --- Dotfiles / packages / keys ---

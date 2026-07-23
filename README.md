@@ -31,6 +31,14 @@ Layout:
 
 Shell config is written to `~/.bashaux` (sourced from `~/.bashrc`). Refresh with `envup` or re-run `./install.sh`.
 
-`envup` pulls workenv and runs `install.sh`, but **prompts** before ensuring/building Python (`[y/N]`, default no). Use `envup --force-python` or `envup --skip-python` to skip the prompt.
+`envup` pulls workenv and runs `install.sh`. **`install.sh` prompts on `/dev/tty`** before Python and Vim (`[y/N]`, default no), so the questions still appear after `git pull` or when stdin is not a TTY. Skip prompts with flags:
+
+```bash
+envup -y                 # install everything, no questions
+envup --skip-python
+envup --force-python     # rebuild Python, no Python prompt
+envup --skip-vim
+WORKENV_YES=1 envup      # same as -y
+```
 
 After first vim open, run `:PlugInstall` once to fetch coc.nvim (clangd hooks for C/C++).
