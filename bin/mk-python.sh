@@ -89,17 +89,54 @@ find_ca_bundle() {
   return 1
 }
 
-# Download url → out. Retries with an explicit CA, then insecure (bootstrap).
+# Directory of hashed certs (Debian/Ubuntu style) usable with curl --capath.
+find_ca_path() {
+  local d
+  for d in \
+    "${SSL_CERT_DIR:-}" \
+    /etc/ssl/certs \
+    /etc/pki/tls/certs \
+    /usr/lib/ssl/certs
+  do
+    if [[ -n "$d" && -d "$d" ]]; then
+      printf '%s\n' "$d"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Drop env vars that point at missing CA files (common cluster misconfig → curl 77).
+clear_broken_ca_env() {
+  local v val
+  for v in SSL_CERT_FILE CURL_CA_BUNDLE REQUESTS_CA_BUNDLE; do
+    eval "val=\${$v-}"
+    if [[ -n "$val" && ! -r "$val" ]]; then
+      log "Unsetting $v=$val (not readable; causes curl error 77)"
+      unset "$v"
+    fi
+  done
+  if [[ -n "${SSL_CERT_DIR:-}" && ! -d "${SSL_CERT_DIR}" ]]; then
+    unset SSL_CERT_DIR
+  fi
+}
+
+# Download url → out. Clears bad CA env, tries verify, then insecure bootstrap.
 download() {
   local url="$1" out="$2"
-  local ca=""
+  local ca="" capath=""
   have wget || have curl || die "need wget or curl to download $url"
 
+  clear_broken_ca_env
   ca="$(find_ca_bundle || true)"
+  capath="$(find_ca_path || true)"
   if [[ -n "$ca" ]]; then
     export SSL_CERT_FILE="$ca"
     export CURL_CA_BUNDLE="$ca"
     export REQUESTS_CA_BUNDLE="$ca"
+  fi
+  if [[ -n "$capath" ]]; then
+    export SSL_CERT_DIR="$capath"
   fi
 
   _download_once() {
@@ -110,8 +147,18 @@ download() {
       local -a cargs=(-fL --progress-bar -o "$out" --connect-timeout 30 --retry 2)
       if [[ "$mode" == insecure ]]; then
         cargs+=(-k)
-      elif [[ -n "$ca" ]]; then
-        cargs+=(--cacert "$ca")
+      else
+        # Explicit paths beat curl's compile-time default (often a missing file on HPC).
+        if [[ -n "$ca" ]]; then
+          cargs+=(--cacert "$ca")
+        fi
+        if [[ -n "$capath" ]]; then
+          cargs+=(--capath "$capath")
+        fi
+        # If we have neither, skip verify attempt for curl (would hit error 77).
+        if [[ -z "$ca" && -z "$capath" ]]; then
+          return 1
+        fi
       fi
       if curl "${cargs[@]}" "$url" && [[ -s "$out" ]]; then
         return 0
@@ -123,6 +170,8 @@ download() {
         wargs+=(--no-check-certificate)
       elif [[ -n "$ca" ]]; then
         wargs+=(--ca-certificate="$ca")
+      else
+        return 1
       fi
       if wget "${wargs[@]}" "$url" && [[ -s "$out" ]]; then
         return 0
@@ -131,19 +180,21 @@ download() {
     return 1
   }
 
-  if _download_once verify; then
+  if [[ -n "$ca" || -n "$capath" ]] && _download_once verify; then
     return 0
   fi
 
-  # Chicken-and-egg: broken CA config is common on HPC nodes; we need the
-  # tarball to build OpenSSL / Python that will verify TLS correctly later.
-  log "WARNING: TLS verify failed for $url"
-  if [[ -n "$ca" ]]; then
-    log "  (tried CA bundle: $ca)"
+  # Chicken-and-egg: broken/missing CA is common on HPC; we need the tarball
+  # to build OpenSSL / Python that will verify TLS correctly later.
+  if [[ -n "$ca" || -n "$capath" ]]; then
+    log "WARNING: TLS verify failed for $url"
+    [[ -n "$ca" ]] && log "  (tried CA bundle: $ca)"
+    [[ -n "$capath" ]] && log "  (tried CA path: $capath)"
   else
-    log "  (no CA bundle found under /etc/ssl or /etc/pki)"
+    log "WARNING: no usable CA bundle/path; downloading without TLS verify (bootstrap only)"
+    log "  $url"
   fi
-  log "  retrying without certificate verification (bootstrap only)"
+  log "  using curl -k / wget --no-check-certificate"
   if _download_once insecure; then
     return 0
   fi

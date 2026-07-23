@@ -172,7 +172,8 @@ export HISTFILESIZE=-1
 
 # git pull + install.sh (install.sh prompts on /dev/tty before Python/Vim).
 # Flags are passed through: envup --skip-python, envup -y, envup --force-python, …
-envup() {{
+# Use "function" keyword — required on some cluster bash builds for this definition form.
+function envup {{
   local _envup_pwd="$PWD"
   cd "$WORKENV_ROOT" || return 1
   if ! git pull; then
@@ -215,7 +216,7 @@ fi
 #   history -n  pull lines written by other shells into this session
 # One PROMPT_COMMAND function so the DEBUG tab-title trap does not treat
 # "history -a" as a user command (which left the hourglass stuck).
-__workenv_prompt_command__() {{
+function __workenv_prompt_command__ {{
   if declare -F __timer_thing_end__ >/dev/null 2>&1; then
     __timer_thing_end__
   fi
