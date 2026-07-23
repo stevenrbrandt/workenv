@@ -16,7 +16,7 @@ ACCOUNT = os.environ.get("ACCOUNT")
 
 def submit_job(cmd_args):
     script = f"""#!/bin/bash
-#SBATCH -N 1
+#SBATCH -N 1 -n 2
 #SBATCH -A {ACCOUNT}
 #SBATCH -p checkpt
 cd {HERE}
