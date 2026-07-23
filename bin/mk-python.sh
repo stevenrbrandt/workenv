@@ -59,16 +59,88 @@ need_cmds() {
   done
 }
 
+# Locate a usable CA bundle (clusters often point curl at a missing path → error 77).
+find_ca_bundle() {
+  local c
+  for c in \
+    "${SSL_CERT_FILE:-}" \
+    "${CURL_CA_BUNDLE:-}" \
+    "${REQUESTS_CA_BUNDLE:-}" \
+    /etc/ssl/certs/ca-certificates.crt \
+    /etc/pki/tls/certs/ca-bundle.crt \
+    /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+    /etc/ssl/cert.pem \
+    /usr/lib/ssl/cert.pem \
+    /etc/ssl/ca-bundle.pem \
+    /etc/pki/tls/cert.pem
+  do
+    if [[ -n "$c" && -r "$c" && -s "$c" ]]; then
+      printf '%s\n' "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Download url → out. Retries with an explicit CA, then insecure (bootstrap).
 download() {
   local url="$1" out="$2"
-  if have wget; then
-    wget -q --show-progress -O "$out" "$url" || return 1
-  elif have curl; then
-    curl -fL --progress-bar -o "$out" "$url" || return 1
-  else
-    die "need wget or curl to download $url"
+  local ca=""
+  have wget || have curl || die "need wget or curl to download $url"
+
+  ca="$(find_ca_bundle || true)"
+  if [[ -n "$ca" ]]; then
+    export SSL_CERT_FILE="$ca"
+    export CURL_CA_BUNDLE="$ca"
+    export REQUESTS_CA_BUNDLE="$ca"
   fi
-  [[ -s "$out" ]] || return 1
+
+  _download_once() {
+    # $1 = verify|insecure
+    local mode="$1"
+    rm -f "$out"
+    if have curl; then
+      local -a cargs=(-fL --progress-bar -o "$out" --connect-timeout 30 --retry 2)
+      if [[ "$mode" == insecure ]]; then
+        cargs+=(-k)
+      elif [[ -n "$ca" ]]; then
+        cargs+=(--cacert "$ca")
+      fi
+      if curl "${cargs[@]}" "$url" && [[ -s "$out" ]]; then
+        return 0
+      fi
+    fi
+    if have wget; then
+      local -a wargs=(-q --show-progress -O "$out" --timeout=30 --tries=2)
+      if [[ "$mode" == insecure ]]; then
+        wargs+=(--no-check-certificate)
+      elif [[ -n "$ca" ]]; then
+        wargs+=(--ca-certificate="$ca")
+      fi
+      if wget "${wargs[@]}" "$url" && [[ -s "$out" ]]; then
+        return 0
+      fi
+    fi
+    return 1
+  }
+
+  if _download_once verify; then
+    return 0
+  fi
+
+  # Chicken-and-egg: broken CA config is common on HPC nodes; we need the
+  # tarball to build OpenSSL / Python that will verify TLS correctly later.
+  log "WARNING: TLS verify failed for $url"
+  if [[ -n "$ca" ]]; then
+    log "  (tried CA bundle: $ca)"
+  else
+    log "  (no CA bundle found under /etc/ssl or /etc/pki)"
+  fi
+  log "  retrying without certificate verification (bootstrap only)"
+  if _download_once insecure; then
+    return 0
+  fi
+  return 1
 }
 
 # --- Already good? ---

@@ -31,4 +31,6 @@ Layout:
 
 Shell config is written to `~/.bashaux` (sourced from `~/.bashrc`). Refresh with `envup` or re-run `./install.sh`.
 
+`envup` pulls workenv and runs `install.sh`, but **prompts** before ensuring/building Python (`[y/N]`, default no). Use `envup --force-python` or `envup --skip-python` to skip the prompt.
+
 After first vim open, run `:PlugInstall` once to fetch coc.nvim (clangd hooks for C/C++).

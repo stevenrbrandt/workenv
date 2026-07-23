@@ -170,7 +170,44 @@ export HISTFILESIZE=-1
 # update the values of LINES and COLUMNS.
 #shopt -s checkwinsize
 
-alias envup='(cd "$WORKENV_ROOT" && git pull && ./install.sh) ; source ~/.bashrc'
+# git pull + install.sh; prompt before the (possibly long) Python build unless
+# the caller already passed --skip-python / --force-python.
+envup() {{
+  local -a args=("$@")
+  local has_py_flag=0 a ans="" _envup_pwd
+  _envup_pwd="$PWD"
+  cd "$WORKENV_ROOT" || return 1
+  if ! git pull; then
+    cd "$_envup_pwd" 2>/dev/null || true
+    return 1
+  fi
+  for a in "${{args[@]+"${{args[@]}}"}}"; do
+    case "$a" in
+      --skip-python|--force-python) has_py_flag=1 ;;
+    esac
+  done
+  if [[ "$has_py_flag" -eq 0 ]]; then
+    if [[ -t 0 ]]; then
+      printf 'Install/ensure platform Python (%s)? [y/N] ' \
+        "${{WORKENV_PREFIX:-$WORKENV_ROOT/${{WORKENV_PLATFORM:-$(uname -m)}}}}"
+      read -r ans || ans=""
+      case "$ans" in
+        y|Y|yes|YES) ;;
+        *) args+=(--skip-python) ;;
+      esac
+    else
+      # non-interactive (cron, pipes): do not start a multi-hour build
+      args+=(--skip-python)
+    fi
+  fi
+  if ! ./install.sh "${{args[@]+"${{args[@]}}"}}"; then
+    cd "$_envup_pwd" 2>/dev/null || true
+    return 1
+  fi
+  cd "$_envup_pwd" 2>/dev/null || true
+  # shellcheck source=/dev/null
+  source ~/.bashrc
+}}
 alias git-clear-passwd='git config --global credential.helper store'
 if [ "$SPACK_ROOT" != "" ]
 then
