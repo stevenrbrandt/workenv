@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build Python into a platform-specific prefix under workenv (no root required).
-# Ensures libffi (_ctypes), OpenSSL (ssl / pip HTTPS), and liblzma (_lzma) —
-# system or built into prefix.
+# Ensures libffi (_ctypes), OpenSSL (ssl), liblzma (_lzma), and sqlite3 (_sqlite3)
+# — system or built into prefix. These are stdlib C modules; pip cannot add them.
 #
 # Usage:
 #   mk-python.sh              # install PY_VER (default 3.13.14) if needed
@@ -26,6 +26,10 @@ OPENSSL_VER="${OPENSSL_VER:-3.0.15}"
 OPENSSL_BUNDLE="${OPENSSL_BUNDLE:-0}"
 # liblzma / xz (Python _lzma module — required by nrpy and many scientific packages)
 XZ_VER="${XZ_VER:-5.6.3}"
+# SQLite autoconf amalgamation year + version id (see https://www.sqlite.org/download.html)
+# 3490100 = 3.49.1 — override with SQLITE_YEAR / SQLITE_VER if a URL 404s
+SQLITE_YEAR="${SQLITE_YEAR:-2025}"
+SQLITE_VER="${SQLITE_VER:-3490100}"
 BUILD_ROOT="${BUILD_ROOT:-/tmp/workenv-python-build-$$}"
 NPROC="${NPROC:-$(nproc 2>/dev/null || echo 2)}"
 # Set by ensure_openssl: directory passed to Python --with-openssl=
@@ -153,15 +157,15 @@ python_smoke() {
   local got
   got="$("$py" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null)" || return 1
   [[ "$got" == "$PY_VER" ]] || return 1
-  # _ctypes, ssl, lzma — needed for pip, HTTPS, and packages like nrpy
-  "$py" -c 'import _ctypes, ssl, lzma; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
+  # stdlib C extensions — cannot be fixed with pip after the fact
+  "$py" -c 'import _ctypes, ssl, lzma, sqlite3; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
   return 0
 }
 
 TARGET_PY="$PREFIX/bin/python${PY_MM}"
 
 if [[ "$FORCE" -eq 0 ]] && python_smoke "$TARGET_PY"; then
-  log "Python $PY_VER already OK at $TARGET_PY (including _ctypes + ssl + lzma)"
+  log "Python $PY_VER already OK at $TARGET_PY (_ctypes + ssl + lzma + sqlite3)"
   log "  ssl: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
   # Keep convenience symlinks inside the platform prefix
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python"
@@ -401,6 +405,75 @@ ensure_liblzma() {
 
 ensure_liblzma
 
+# --- SQLite (required for Python _sqlite3 — used by optuna, etc.) ---
+sqlite_usable() {
+  if [[ -r "$PREFIX/include/sqlite3.h" ]] && \
+     { [[ -e "$PREFIX/lib/libsqlite3.so" ]] || [[ -e "$PREFIX/lib64/libsqlite3.so" ]] || \
+       ls "$PREFIX"/lib/libsqlite3.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libsqlite3.so* >/dev/null 2>&1; }; then
+    return 0
+  fi
+  if have pkg-config && pkg-config --exists sqlite3; then
+    return 0
+  fi
+  cat >"$BUILD_ROOT/sqlite_probe.c" <<'EOF'
+#include <sqlite3.h>
+int main(void) {
+  return (sqlite3_libversion_number() > 0) ? 0 : 1;
+}
+EOF
+  # shellcheck disable=SC2086
+  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/sqlite_probe.c" -lsqlite3 -o "$BUILD_ROOT/sqlite_probe" 2>/dev/null
+}
+
+ensure_sqlite() {
+  if sqlite_usable; then
+    log "sqlite3 available (system or prefix)"
+    if have pkg-config && pkg-config --exists sqlite3; then
+      log "  pkg-config sqlite3: $(pkg-config --modversion sqlite3)"
+      local cflags libs
+      cflags="$(pkg-config --cflags sqlite3 2>/dev/null || true)"
+      libs="$(pkg-config --libs sqlite3 2>/dev/null || true)"
+      export CPPFLAGS="$cflags $CPPFLAGS"
+      export LDFLAGS="$libs $LDFLAGS"
+    elif [[ -r "$PREFIX/include/sqlite3.h" ]]; then
+      export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+      export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+    fi
+    return 0
+  fi
+
+  log "sqlite3 not found; building SQLite $SQLITE_VER into $PREFIX (no root)"
+  local tarball="sqlite-autoconf-${SQLITE_VER}.tar.gz"
+  local url="https://www.sqlite.org/${SQLITE_YEAR}/${tarball}"
+  # Fallbacks if the year/version combo 404s on a given mirror layout
+  local url_alt="https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz"
+  cd "$BUILD_ROOT"
+  if ! download "$url" "$tarball"; then
+    log "primary SQLite URL failed; trying 3.47.2 fallback"
+    tarball="sqlite-autoconf-3470200.tar.gz"
+    download "$url_alt" "$tarball" || die "failed to download SQLite amalgamation"
+  fi
+  tar -xzf "$tarball"
+  # Directory name matches the tarball stem
+  local srcdir
+  srcdir="$(tar -tzf "$tarball" | head -1 | cut -d/ -f1)"
+  cd "$srcdir"
+  # Recommended feature flags for a modern Python build
+  local _cflags_save="${CFLAGS-}"
+  export CFLAGS="${CFLAGS:-} -O2 -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_JSON1 -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_COLUMN_METADATA"
+  ./configure --prefix="$PREFIX" --enable-shared --disable-static
+  make -j"$NPROC"
+  make install
+  if [[ -n "$_cflags_save" ]]; then export CFLAGS="$_cflags_save"; else unset CFLAGS; fi
+  export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+  export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+  sqlite_usable || die "sqlite3 still not usable after local build"
+  log "sqlite3 installed to $PREFIX"
+}
+
+ensure_sqlite
+
 # Helpful optional deps (warn only — do not fail the build)
 warn_missing_headers() {
   local name="$1" header="$2"
@@ -413,7 +486,6 @@ EOF
   fi
 }
 warn_missing_headers "zlib" "zlib.h"
-warn_missing_headers "SQLite3" "sqlite3.h"
 warn_missing_headers "readline" "readline/readline.h"
 warn_missing_headers "bzip2" "bzlib.h"
 
@@ -472,6 +544,9 @@ fi
 if ! "$TARGET_PY" -c 'import lzma; print("lzma OK:", lzma.__file__)'; then
   die "Python installed but _lzma still missing. Check liblzma / xz headers and config.log in $BUILD_ROOT"
 fi
+if ! "$TARGET_PY" -c 'import sqlite3; print("sqlite3 OK:", sqlite3.sqlite_version, sqlite3.__file__)'; then
+  die "Python installed but _sqlite3 still missing. Check libsqlite3 headers and config.log in $BUILD_ROOT"
+fi
 
 # Report other modules
 "$TARGET_PY" - <<'PY'
@@ -489,4 +564,5 @@ log "SUCCESS: Python $PY_VER -> $PREFIX"
 log "  $TARGET_PY"
 log "  OpenSSL: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
 log "  lzma: OK"
+log "  sqlite3: $("$TARGET_PY" -c 'import sqlite3; print(sqlite3.sqlite_version)')"
 log "  Add to PATH via install.sh / ~/.bashaux (platform prefix: $WORKENV_PLATFORM)"
