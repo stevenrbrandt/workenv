@@ -504,16 +504,21 @@ ensure_sqlite() {
     tarball="sqlite-autoconf-3470200.tar.gz"
     download "$url_alt" "$tarball" || die "failed to download SQLite amalgamation"
   fi
+  # Directory name = tarball stem (avoid "tar | head" under pipefail — can exit 141)
+  local srcdir="${tarball%.tar.gz}"
+  srcdir="${srcdir%.tgz}"
+  log "Extracting $tarball → $srcdir"
   tar -xzf "$tarball"
-  # Directory name matches the tarball stem
-  local srcdir
-  srcdir="$(tar -tzf "$tarball" | head -1 | cut -d/ -f1)"
+  [[ -d "$srcdir" ]] || die "expected directory $srcdir after extracting $tarball"
   cd "$srcdir"
   # Recommended feature flags for a modern Python build
   local _cflags_save="${CFLAGS-}"
   export CFLAGS="${CFLAGS:-} -O2 -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_JSON1 -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_COLUMN_METADATA"
+  log "configure --prefix=$PREFIX (sqlite)"
   ./configure --prefix="$PREFIX" --enable-shared --disable-static
+  log "Building sqlite (make -j$NPROC) ..."
   make -j"$NPROC"
+  log "Installing sqlite into $PREFIX ..."
   make install
   if [[ -n "$_cflags_save" ]]; then export CFLAGS="$_cflags_save"; else unset CFLAGS; fi
   export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
