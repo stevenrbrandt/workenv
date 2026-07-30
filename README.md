@@ -16,9 +16,9 @@ PYTHON_OPTIMIZE=0 ./install.sh
 ./install.sh --skip-vim
 ./install.sh --skip-python    # only run install.py (needs an existing python3)
 
-# Python SSL (pip HTTPS): mk-python uses system OpenSSL if present, otherwise
-# builds it into the platform prefix. For apptainer/cluster when the image has
-# no libssl, prefer a self-contained build:
+# Python SSL (pip HTTPS): mk-python uses system OpenSSL when present and only
+# builds it into the platform prefix when missing (or OPENSSL_BUNDLE=1).
+# For apptainer/cluster images with no libssl, force a self-contained build:
 OPENSSL_BUNDLE=1 PYTHON_OPTIMIZE=0 ./install.sh --force-python
 ```
 

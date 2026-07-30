@@ -112,7 +112,8 @@ fi
 
 # Platform bin before portable scripts (avoid shadowing by legacy bin/python)
 export PATH="$PREFIX/bin:$ROOT/bin:$PATH"
-export LD_LIBRARY_PATH="$PREFIX/lib:${PREFIX}/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Do not put PREFIX on LD_LIBRARY_PATH. Platform python/openssl are built with
+# RUNPATH; prepending a bundled libssl breaks distro curl (symbol version mismatch).
 # Keep pip --user installs off the shared ~/.local tree
 export PYTHONUSERBASE="${PYTHONUSERBASE:-$HOME/.local/$WORKENV_PLATFORM}"
 export PATH="$PATH:$PYTHONUSERBASE/bin"

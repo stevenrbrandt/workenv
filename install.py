@@ -50,20 +50,10 @@ if [ -z "${{PYTHONUSERBASE:-}}" ] || [ "$PYTHONUSERBASE" = "$HOME/.local" ]; the
     export PYTHONUSERBASE="$HOME/.local/$WORKENV_PLATFORM"
 fi
 
-# Platform-specific toolchain (Python, vim, clangd, shared libs)
-if [ -d "$WORKENV_PREFIX/lib" ]; then
-    export LD_LIBRARY_PATH="$WORKENV_PREFIX/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
-fi
-if [ -d "$WORKENV_PREFIX/lib64" ]; then
-    export LD_LIBRARY_PATH="$WORKENV_PREFIX/lib64${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
-fi
-# Legacy single-tree layout (pre multi-arch)
-if [ -d "$WORKENV_ROOT/lib" ]; then
-    export LD_LIBRARY_PATH="$WORKENV_ROOT/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
-fi
-if [ -d "$WORKENV_ROOT/lib64" ]; then
-    export LD_LIBRARY_PATH="$WORKENV_ROOT/lib64${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
-fi
+# Platform tools (Python, openssl, xz, …) are linked with RUNPATH into
+# $WORKENV_PREFIX. Do NOT put that tree on LD_LIBRARY_PATH: a bundled
+# libssl.so there shadows the distro one and breaks system curl/wget
+# (e.g. OPENSSL_3.2.0 not found when PREFIX has OpenSSL 3.0.x).
 
 if [ -d ~/venv ]
 then

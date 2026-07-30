@@ -8,7 +8,8 @@
 #   mk-python.sh --force      # rebuild even if smoke tests pass
 #   PY_VER=3.13.14 mk-python.sh
 #   PYTHON_OPTIMIZE=0 mk-python.sh   # skip PGO (much faster)
-#   OPENSSL_BUNDLE=1 mk-python.sh    # always build OpenSSL into prefix (portable)
+#   OPENSSL_BUNDLE=1 mk-python.sh    # force OpenSSL into prefix (portable/apptainer)
+#   Default: use system OpenSSL if present; only build into prefix when missing.
 #
 # Installs to: $WORKENV_ROOT/$WORKENV_PLATFORM
 #   e.g. ~/workenv/x86_64-glibc-2.35  (arch + libc; see workenv-platform.sh)
@@ -121,6 +122,37 @@ clear_broken_ca_env() {
   fi
 }
 
+# Run a command without PREFIX on LD_LIBRARY_PATH / PKG_CONFIG_PATH.
+# System curl/wget are linked against distro OpenSSL; if an older bundled
+# libssl.so is first on LD_LIBRARY_PATH, curl fails with e.g.
+#   version `OPENSSL_3.2.0' not found (required by libcurl.so)
+with_system_libs() {
+  local cleaned_ld="" cleaned_pc="" p
+  local -a envargs=()
+  local IFS=':'
+  for p in ${LD_LIBRARY_PATH-}; do
+    [[ -z "$p" ]] && continue
+    [[ "$p" == "$PREFIX/lib" || "$p" == "$PREFIX/lib64" ]] && continue
+    cleaned_ld="${cleaned_ld:+$cleaned_ld:}$p"
+  done
+  for p in ${PKG_CONFIG_PATH-}; do
+    [[ -z "$p" ]] && continue
+    [[ "$p" == "$PREFIX/lib/pkgconfig" || "$p" == "$PREFIX/lib64/pkgconfig" ]] && continue
+    cleaned_pc="${cleaned_pc:+$cleaned_pc:}$p"
+  done
+  if [[ -n "$cleaned_ld" ]]; then
+    envargs+=(LD_LIBRARY_PATH="$cleaned_ld")
+  else
+    envargs+=(-u LD_LIBRARY_PATH)
+  fi
+  if [[ -n "$cleaned_pc" ]]; then
+    envargs+=(PKG_CONFIG_PATH="$cleaned_pc")
+  else
+    envargs+=(-u PKG_CONFIG_PATH)
+  fi
+  env "${envargs[@]}" "$@"
+}
+
 # Download url → out. Clears bad CA env, tries verify, then insecure bootstrap.
 download() {
   local url="$1" out="$2"
@@ -160,7 +192,7 @@ download() {
           return 1
         fi
       fi
-      if curl "${cargs[@]}" "$url" && [[ -s "$out" ]]; then
+      if with_system_libs curl "${cargs[@]}" "$url" && [[ -s "$out" ]]; then
         return 0
       fi
     fi
@@ -173,7 +205,7 @@ download() {
       else
         return 1
       fi
-      if wget "${wargs[@]}" "$url" && [[ -s "$out" ]]; then
+      if with_system_libs wget "${wargs[@]}" "$url" && [[ -s "$out" ]]; then
         return 0
       fi
     fi
@@ -236,7 +268,10 @@ cleanup() { rm -rf "$BUILD_ROOT"; }
 trap cleanup EXIT
 
 export PATH="$PREFIX/bin:$PATH"
-export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# LD_LIBRARY_PATH helps the build find libs just installed into PREFIX, but
+# download()/with_system_libs strip PREFIX so system curl is not broken by an
+# older bundled libssl. Prefer RUNPATH on installed binaries for runtime.
+export LD_LIBRARY_PATH="$PREFIX/lib:$PREFIX/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export CPPFLAGS="-I$PREFIX/include ${CPPFLAGS:-}"
 export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 ${LDFLAGS:-}"
@@ -293,25 +328,67 @@ ensure_libffi() {
 ensure_libffi
 
 # --- OpenSSL (required for ssl module / pip HTTPS, e.g. inside apptainer) ---
-openssl_usable() {
-  # Prefer a prefix we already installed into
+# Only build into PREFIX when the system has no usable OpenSSL (or OPENSSL_BUNDLE=1).
+# Preferring a prior PREFIX bundle unconditionally is wrong: an older libssl on
+# LD_LIBRARY_PATH breaks distro curl (needs newer OPENSSL_* symbols).
+
+prefix_openssl_usable() {
   if [[ -r "$PREFIX/include/openssl/ssl.h" ]] && \
      { [[ -e "$PREFIX/lib/libssl.so" ]] || [[ -e "$PREFIX/lib64/libssl.so" ]] || \
        ls "$PREFIX"/lib/libssl.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libssl.so* >/dev/null 2>&1; }; then
     return 0
   fi
-  if have pkg-config && pkg-config --exists openssl; then
+  return 1
+}
+
+# Distro/system OpenSSL only — ignore PREFIX pkg-config and -I/-L so a leftover
+# bundle does not masquerade as "system has OpenSSL".
+system_openssl_usable() {
+  if have pkg-config && with_system_libs pkg-config --exists openssl; then
     return 0
   fi
-  cat >"$BUILD_ROOT/ssl_probe.c" <<'EOF'
+  cat >"$BUILD_ROOT/ssl_probe_sys.c" <<'EOF'
 #include <openssl/ssl.h>
 #include <openssl/opensslv.h>
 int main(void) {
   return (OPENSSL_VERSION_NUMBER > 0) ? 0 : 1;
 }
 EOF
-  # shellcheck disable=SC2086
-  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/ssl_probe.c" -lssl -lcrypto -o "$BUILD_ROOT/ssl_probe" 2>/dev/null
+  # No PREFIX CPPFLAGS/LDFLAGS — pure system headers and libs
+  with_system_libs cc "$BUILD_ROOT/ssl_probe_sys.c" -lssl -lcrypto \
+    -o "$BUILD_ROOT/ssl_probe_sys" 2>/dev/null
+}
+
+use_system_openssl() {
+  local cflags libs pref
+  if have pkg-config && with_system_libs pkg-config --exists openssl; then
+    log "OpenSSL available (system): $(with_system_libs pkg-config --modversion openssl)"
+    cflags="$(with_system_libs pkg-config --cflags openssl 2>/dev/null || true)"
+    libs="$(with_system_libs pkg-config --libs openssl 2>/dev/null || true)"
+    pref="$(with_system_libs pkg-config --variable=prefix openssl 2>/dev/null || true)"
+    export CPPFLAGS="$cflags $CPPFLAGS"
+    export LDFLAGS="$libs $LDFLAGS"
+    # Python --with-openssl wants a root that contains include/ and lib(or lib64)/
+    if [[ -n "$pref" && -r "$pref/include/openssl/ssl.h" ]]; then
+      OPENSSL_DIR="$pref"
+    else
+      OPENSSL_DIR="/usr"
+    fi
+  else
+    log "OpenSSL available via compiler default paths"
+    OPENSSL_DIR="/usr"
+  fi
+  if prefix_openssl_usable; then
+    log "  note: PREFIX also has OpenSSL from a prior bundle; ignoring it (OPENSSL_BUNDLE=0)."
+    log "  (Leave PREFIX libssl off LD_LIBRARY_PATH so system curl keeps working.)"
+  fi
+}
+
+use_prefix_openssl() {
+  log "OpenSSL available in prefix $PREFIX"
+  export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+  export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+  OPENSSL_DIR="$PREFIX"
 }
 
 build_openssl_into_prefix() {
@@ -346,7 +423,7 @@ ZEOF
   export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
   export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
   export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
-  openssl_usable || die "OpenSSL still not usable after local build"
+  prefix_openssl_usable || die "OpenSSL still not usable after local build"
   log "OpenSSL installed to $PREFIX"
 }
 
@@ -355,36 +432,29 @@ ensure_openssl() {
 
   if [[ "$OPENSSL_BUNDLE" == "1" ]]; then
     log "OPENSSL_BUNDLE=1 — building OpenSSL into prefix even if system has it"
-    build_openssl_into_prefix
-    OPENSSL_DIR="$PREFIX"
-    return 0
-  fi
-
-  if openssl_usable; then
-    if [[ -r "$PREFIX/include/openssl/ssl.h" ]]; then
-      log "OpenSSL available in prefix $PREFIX"
-      OPENSSL_DIR="$PREFIX"
-    elif have pkg-config && pkg-config --exists openssl; then
-      log "OpenSSL available (system): $(pkg-config --modversion openssl)"
-      local cflags libs pref
-      cflags="$(pkg-config --cflags openssl 2>/dev/null || true)"
-      libs="$(pkg-config --libs openssl 2>/dev/null || true)"
-      pref="$(pkg-config --variable=prefix openssl 2>/dev/null || true)"
-      export CPPFLAGS="$cflags $CPPFLAGS"
-      export LDFLAGS="$libs $LDFLAGS"
-      # Python --with-openssl wants a root that contains include/ and lib/
-      if [[ -n "$pref" && -r "$pref/include/openssl/ssl.h" ]]; then
-        OPENSSL_DIR="$pref"
-      else
-        OPENSSL_DIR="/usr"
-      fi
+    if prefix_openssl_usable; then
+      log "  reusing existing OpenSSL in $PREFIX (delete it or use a clean PREFIX to rebuild)"
+      use_prefix_openssl
     else
-      log "OpenSSL available via compiler default paths"
-      OPENSSL_DIR="/usr"
+      build_openssl_into_prefix
+      OPENSSL_DIR="$PREFIX"
     fi
     return 0
   fi
 
+  # Default: system first, then a prior prefix bundle, else build.
+  if system_openssl_usable; then
+    use_system_openssl
+    return 0
+  fi
+
+  if prefix_openssl_usable; then
+    log "no system OpenSSL; using existing prefix build"
+    use_prefix_openssl
+    return 0
+  fi
+
+  log "no usable system OpenSSL; building into prefix (set OPENSSL_BUNDLE=1 to force this)"
   build_openssl_into_prefix
   OPENSSL_DIR="$PREFIX"
 }
