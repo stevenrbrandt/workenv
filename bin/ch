@@ -101,23 +101,30 @@ sub file {
   }
 }
 
+for $wuser (("steve", "sbrandt", "sbrand3")) {
+    $whome = "/mnt/c/User/${wuser}";
+    if(-d $whome) {
+        break;
+    }
+}
+print("whome=${whome}\n");
 my @cmd = (
  "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
- "/mnt/c/Users/steve/AppData/Local/Programs/Opera Air/opera.exe",
- "/mnt/c/Users/steve/AppData/Local/Programs/Opera/opera.exe",
- "/mnt/c/Users/steve/AppData/Local/Programs/Opera GX/opera.exe",
- "/mnt/c/Users/sbrandt/AppData/Local/Programs/Opera/launcher.exe",
+ "${whome}/AppData/Local/Programs/Opera Air/opera.exe",
+ "${whome}/AppData/Local/Programs/Opera/opera.exe",
+ "${whome}/AppData/Local/Programs/Opera GX/opera.exe",
+ "${whome}/AppData/Local/Programs/Opera/launcher.exe",
  "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe"
 );
 
 my $cmd = undef;
 for $c (@cmd) {
     if(-e $c) {
-        print("FOUND: $c\n");
+        #print("FOUND: $c\n");
         $cmd = "'$c'";
         last;
     } else {
-        print("  --not found: $c\n");
+        ;#print("  --not found: $c\n");
     }
 }
 #$cmd =~ s/ /\\ /g;
@@ -140,18 +147,11 @@ for(my $i=0;$i <= $#ARGV;$i++) {
             $file = $cwd."/".$file;
             $file =~ s/\/+/\//g;
         }
-        print("file=$file\n");
-        my $whome;
-        if(-r "/mnt/c/Users/sbrandt") {
-            $whome = "file:///C:/Users/sbrandt";
-        } else {
-            $whome = "file:///C:/Users/steve";
-        }
-        if($file =~ s{.*/Downloads}{$whome/Downloads}) {
-            $cmd .= " -url '$file'";
-        } elsif($file =~ "/mnt/c/Users") {
+        print("file=$file whome=$whome\n");
+        if($file =~ "/mnt/c/Users") {
             $cmd .= " -url 'file:///C:/Users$''";
         } else {
+            print("Not using cmd=$cmd\n");
             exit(0);
         }
     } elsif($a =~ /-f=(.*)/) {
@@ -169,6 +169,7 @@ if($#ARGV < 0) {
 }
 
 sub usage {
+    print("Usage:\n");
     for my $k (sort keys %bookmarks) {
         printf("%50s|%10s\n",$bookmarks{$k}->[1],$k);
     }
