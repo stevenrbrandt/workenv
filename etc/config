@@ -1,6 +1,9 @@
 Host *
     ServerAliveInterval 300
     ServerAliveCountMax 2
+Host bitbucket.org
+    IdentityFile ~/.ssh/id_watannabe
+    IdentitiesOnly Yes
 Host openstack
     hostname 129.114.104.72
     user ubuntu
@@ -66,6 +69,7 @@ Host bounce
     #userknownhostsfile /dev/null
     port 2525
     user sbrandt
+    LogLevel Error
 Host vault
     hostname vault.cct.lsu.edu
     user sbrandt
@@ -96,10 +100,11 @@ Host mel5
     port 2526
     # Enable X-windows
     #remoteforward 127.0.0.1:6000 127.0.0.1:6000
-    localforward 127.0.0.1:445 melete05.cct.lsu.edu:4445
+    #localforward 127.0.0.1:445 melete05.cct.lsu.edu:4445
     #localforward 127.0.0.1:9443 127.0.0.1:9443
     #localforward 127.0.0.1:9080 127.0.0.1:9080
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host relay
     hostname melete05.cct.lsu.edu
     port 2526
