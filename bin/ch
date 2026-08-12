@@ -147,6 +147,7 @@ for(my $i=0;$i <= $#ARGV;$i++) {
             $file = $cwd."/".$file;
             $file =~ s/\/+/\//g;
         }
+        $file = Cwd::realpath($file);
         print("file=$file whome=$whome\n");
         if($file =~ "/mnt/c/Users") {
             $cmd .= " -url 'file:///C:/Users$''";
