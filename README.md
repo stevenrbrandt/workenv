@@ -41,4 +41,4 @@ envup --skip-vim
 WORKENV_YES=1 envup      # same as -y
 ```
 
-After first vim open, run `:PlugInstall` once to fetch coc.nvim (clangd hooks for C/C++).
+`install.py` (and `mk-vim.sh`) install vim-plug, portable Node.js + `clangd` into `$WORKENV_PREFIX`, and clone `coc.nvim` — no sudo and no manual `:PlugInstall`. `~/.vim/coc-settings.json` is pointed at the prefix `clangd` binary.

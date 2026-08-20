@@ -1,10 +1,52 @@
 #!/usr/bin/env python3
 from __future__ import print_function
 import os
+import platform
+import re
+import shutil
+import subprocess
+import tarfile
+import tempfile
+import zipfile
 from subprocess import call
+
+try:
+    from urllib.request import urlretrieve as _urllib_urlretrieve
+except ImportError:
+    from urllib import urlretrieve as _urllib_urlretrieve  # type: ignore
 
 home = os.environ["HOME"]
 here = os.path.dirname(os.path.abspath(__file__))
+
+# Portable Node for coc.nvim (no root / no sudo). Override with NODE_VER=...
+NODE_VER = os.environ.get("NODE_VER", "22.18.0")
+# Official clangd release zip (https://github.com/clangd/clangd/releases).
+CLANGD_VER = os.environ.get("CLANGD_VER", "22.1.6")
+
+
+def download(url, dest):
+    """Fetch url to dest without sudo.
+
+    Prefer curl/wget: workenv's bundled OpenSSL often lacks the system
+    CA bundle, so urllib HTTPS can fail with CERTIFICATE_VERIFY_FAILED.
+    """
+    dest_dir = os.path.dirname(dest) or "."
+    os.makedirs(dest_dir, exist_ok=True)
+    curl = shutil.which("curl")
+    if curl:
+        rc = call([curl, "-fL", "--retry", "3", "-o", dest, url])
+        if rc == 0 and os.path.isfile(dest):
+            return
+    wget = shutil.which("wget")
+    if wget:
+        rc = call([wget, "-q", "-O", dest, url])
+        if rc == 0 and os.path.isfile(dest):
+            return
+    # Last resort: urllib (may need SSL_CERT_FILE pointing at system CAs)
+    ca = "/etc/ssl/certs/ca-certificates.crt"
+    if os.path.isfile(ca) and not os.environ.get("SSL_CERT_FILE"):
+        os.environ["SSL_CERT_FILE"] = ca
+    _urllib_urlretrieve(url, dest)
 
 linetoadd = "source ~/.bashaux"
 found = False
@@ -141,7 +183,23 @@ alias ps1color='PS1=$PS1_COLOR'
 alias ps1bw='PS1=$PS1_BW'
 unset PROMPT_COMMAND
 export OMP_NUM_THREADS=1
-export LANG=en_US.UTF-8
+# Prefer en_US.UTF-8 when the locale archive has it; otherwise C.UTF-8.
+# Minimal images (WSL, containers, HPC) often only ship C/C.utf8/POSIX.
+# A missing LANG breaks bash-completion file expansion: it does
+#   LC_CTYPE=${{LC_ALL:-${{LC_CTYPE:-${{LANG-}}}}}} LC_ALL=
+# and spams "setlocale: LC_CTYPE: cannot change locale (en_US.UTF-8)".
+_workenv_lang=
+if command -v locale >/dev/null 2>&1; then
+  _workenv_locales="$(locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+  if printf '%s\\n' "$_workenv_locales" | grep -qx 'en_us.utf8'; then
+    _workenv_lang=en_US.UTF-8
+  elif printf '%s\\n' "$_workenv_locales" | grep -qx 'c.utf8'; then
+    _workenv_lang=C.UTF-8
+  fi
+  unset _workenv_locales
+fi
+export LANG="${{_workenv_lang:-C}}"
+unset _workenv_lang
 if command -v vim >/dev/null 2>&1; then
   export VISUAL="$(command -v vim)"
 fi
@@ -216,10 +274,77 @@ function __workenv_prompt_command__ {{
 PROMPT_COMMAND=__workenv_prompt_command__
 """.format(here=here), file=fd)
 
-vimrc = os.path.join(home, ".vimrc")
-if not os.path.exists(vimrc):
-    with open(vimrc, "w") as fd:
-        print("""
+# --- Vim / coc.nvim (no sudo): portable node + plugin tree + guarded vimrc ---
+
+def detect_workenv_platform():
+    """Match bin/workenv-platform.sh (arch + libc)."""
+    plat = os.environ.get("WORKENV_PLATFORM")
+    if plat:
+        return plat
+    arch = platform.machine()
+    libc = ""
+    try:
+        out = subprocess.check_output(
+            ["getconf", "GNU_LIBC_VERSION"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        libc = out.replace(" ", "-")
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    if not libc:
+        try:
+            ldd = subprocess.check_output(
+                ["ldd", "--version"], stderr=subprocess.STDOUT, text=True
+            )
+            if "musl" in ldd.lower():
+                libc = "musl"
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    if not libc:
+        libc = "unknown-libc"
+    return "{}-{}".format(arch, libc)
+
+
+def workenv_prefix():
+    return os.path.join(here, detect_workenv_platform())
+
+
+# coc plug block written into ~/.vimrc (literal Vimscript).
+VIM_COC_PLUG_BLOCK = """
+" coc.nvim + clangd (C/C++) via vim-plug when plug is installed.
+" Declare the plugin always so :PlugInstall works; only bind keys once
+" coc is actually present — otherwise <Tab> throws E117 instead of indenting.
+if filereadable(expand('~/.vim/autoload/plug.vim'))
+    call plug#begin()
+    Plug 'neoclide/coc.nvim', {'branch': 'release'}
+    call plug#end()
+
+    " exists('*coc#…') is false at vimrc time (autoload not loaded yet).
+    " Gate on the installed plugin tree so <Tab> still indents before PlugInstall.
+    if isdirectory(expand('~/.vim/plugged/coc.nvim'))
+        " Go to definition / type / implementation / references
+        nmap <silent> gd <Plug>(coc-definition)
+        nmap <silent> gy <Plug>(coc-type-definition)
+        nmap <silent> gi <Plug>(coc-implementation)
+        nmap <silent> gr <Plug>(coc-references)
+        nmap <silent> [g <Plug>(coc-diagnostic-prev)
+        nmap <silent> ]g <Plug>(coc-diagnostic-next)
+        nnoremap <silent> K :call CocActionAsync('doHover')<CR>
+
+        " Tab completion (only when coc is installed)
+        inoremap <silent><expr> <TAB>
+              \\ coc#pum#visible() ? coc#pum#next(1) :
+              \\ CheckBackspace() ? "\\<Tab>" :
+              \\ coc#refresh()
+        inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\\<C-h>"
+        function! CheckBackspace() abort
+          let col = col('.') - 1
+          return !col || getline('.')[col - 1] =~# '\\s'
+        endfunction
+    endif
+endif
+""".lstrip("\n")
+
+VIMRC_DEFAULT = """
 set ai nu ic sw=4 ts=4 expandtab hlsearch linebreak
 "colorscheme torture
 syn on
@@ -244,38 +369,72 @@ if exists('+diffopt') && (has("patch-9.1.1243") || has("nvim-0.12"))
     set diffopt+=inline:char
 endif
 
-" coc.nvim + clangd (C/C++) via vim-plug when plug is installed
-if filereadable(expand('~/.vim/autoload/plug.vim'))
-    call plug#begin()
-    Plug 'neoclide/coc.nvim', {{'branch': 'release'}}
-    call plug#end()
-
-    " Go to definition / type / implementation / references
-    nmap <silent> gd <Plug>(coc-definition)
-    nmap <silent> gy <Plug>(coc-type-definition)
-    nmap <silent> gi <Plug>(coc-implementation)
-    nmap <silent> gr <Plug>(coc-references)
-    nmap <silent> [g <Plug>(coc-diagnostic-prev)
-    nmap <silent> ]g <Plug>(coc-diagnostic-next)
-    nnoremap <silent> K :call CocActionAsync('doHover')<CR>
-
-    " Tab completion
-    inoremap <silent><expr> <TAB>
-          \\ coc#pum#visible() ? coc#pum#next(1) :
-          \\ CheckBackspace() ? "\\<Tab>" :
-          \\ coc#refresh()
-    inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\\<C-h>"
-    function! CheckBackspace() abort
-      let col = col('.') - 1
-      return !col || getline('.')[col - 1] =~# '\\s'
-    endfunction
-endif
-
+{coc_block}
 " C/C++ quality-of-life
 autocmd FileType c,cpp,cuda setlocal commentstring=//\\ %s
 
 colorscheme LecturedInjury
-""".format(here=here), file=fd)
+""".lstrip("\n").format(coc_block=VIM_COC_PLUG_BLOCK)
+
+
+def ensure_vimrc():
+    """Create ~/.vimrc or patch an unguarded coc <Tab> mapping."""
+    vimrc = os.path.join(home, ".vimrc")
+    if not os.path.exists(vimrc):
+        with open(vimrc, "w") as fd:
+            fd.write(VIMRC_DEFAULT)
+        print("Wrote", vimrc)
+        return
+
+    with open(vimrc, "r") as fd:
+        text = fd.read()
+
+    has_tab_coc = "coc#pum#visible" in text and "inoremap" in text
+    has_guard = "plugged/coc.nvim" in text and "isdirectory" in text
+    has_plug = "neoclide/coc.nvim" in text
+
+    if has_tab_coc and not has_guard:
+        # Replace the old unguarded plug/coc block with the gated version.
+        # Use a callable repl so Vimscript backslashes (\s, \<Tab>) are not
+        # interpreted as re template escapes.
+        def _coc_repl(_match):
+            return VIM_COC_PLUG_BLOCK
+
+        patched, n = re.subn(
+            r"\" coc\.nvim \+ clangd.*?\nendif\n",
+            _coc_repl,
+            text,
+            count=1,
+            flags=re.S,
+        )
+        if n == 0:
+            patched, n = re.subn(
+                r"if filereadable\(expand\('~/\.vim/autoload/plug\.vim'\)\).*?\nendif\n",
+                _coc_repl,
+                text,
+                count=1,
+                flags=re.S,
+            )
+        if n:
+            with open(vimrc, "w") as fd:
+                fd.write(patched)
+            print("Patched coc <Tab> guards in", vimrc)
+        else:
+            print("WARNING: could not auto-patch coc block in", vimrc,
+                  "- please gate <Tab> on ~/.vim/plugged/coc.nvim")
+    elif not has_plug:
+        # Append coc plug block before colorscheme / at end.
+        insert_at = text.find("colorscheme ")
+        if insert_at >= 0:
+            text = text[:insert_at] + VIM_COC_PLUG_BLOCK + "\n" + text[insert_at:]
+        else:
+            text = text.rstrip() + "\n\n" + VIM_COC_PLUG_BLOCK
+        with open(vimrc, "w") as fd:
+            fd.write(text)
+        print("Added coc.nvim plug block to", vimrc)
+
+
+ensure_vimrc()
 
 # Install color schemes
 vim_dir = os.path.join(home, ".vim", "colors")
@@ -462,15 +621,14 @@ if installer is None:
     installer = which("zypper")
 
 def sucall(cmd):
+    """Run a package-manager command as root only. Never invokes sudo."""
     if installer is None:
         print("Skipping (no package manager):", cmd)
         return
     if os.getuid() == 0:
         call(cmd)
-    elif which("sudo") is not None:
-        call(["sudo"] + cmd)
     else:
-        print("Skipping (no sudo):", cmd)
+        print("Skipping (not root; sudo disabled):", " ".join(str(c) for c in cmd))
 
 def pkg_install(pkg):
     if installer is None:
@@ -491,42 +649,295 @@ if which("perl") is None:
 if which("hostname") is None:
     pkg_install("hostname")
 
-# vim-plug (for coc.nvim) — no root required
-plug_vim = os.path.join(home, ".vim", "autoload", "plug.vim")
-if not os.path.exists(plug_vim):
+
+def ensure_vim_plug():
+    """Install junegunn/vim-plug into ~/.vim (user-writable, no root)."""
+    plug_vim = os.path.join(home, ".vim", "autoload", "plug.vim")
+    if os.path.exists(plug_vim):
+        print("vim-plug already present:", plug_vim)
+        return plug_vim
     try:
-        from urllib.request import urlretrieve
         os.makedirs(os.path.dirname(plug_vim), exist_ok=True)
         url = "https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim"
         print("Installing vim-plug ->", plug_vim)
-        urlretrieve(url, plug_vim)
+        download(url, plug_vim)
+        return plug_vim
     except Exception as e:
         print("WARNING: could not install vim-plug:", e)
+        return None
 
-# coc-settings.json for clangd (C/C++) — create only if missing
-coc_settings = os.path.join(home, ".vim", "coc-settings.json")
-if not os.path.exists(coc_settings):
-    os.makedirs(os.path.dirname(coc_settings), exist_ok=True)
-    with open(coc_settings, "w") as fd:
-        fd.write("""{
-  "languageserver": {
-    "clangd": {
-      "command": "clangd",
-      "args": ["--background-index", "--clang-tidy"],
-      "rootPatterns": [
-        "compile_commands.json",
-        ".clangd",
-        ".git",
-        "CMakeLists.txt"
-      ],
-      "filetypes": ["c", "cc", "cpp", "c++", "objc", "objcpp", "cuda"]
+
+def _node_arch():
+    m = platform.machine().lower()
+    if m in ("x86_64", "amd64"):
+        return "x64"
+    if m in ("aarch64", "arm64"):
+        return "arm64"
+    if m in ("armv7l", "armhf"):
+        return "armv7l"
+    return None
+
+
+def _extract_tar_strip1(archive, dest):
+    """Extract tar/tar.xz into dest with --strip-components=1 semantics."""
+    os.makedirs(dest, exist_ok=True)
+    # Prefer system tar (handles xz + strip cleanly).
+    tar_bin = shutil.which("tar")
+    if tar_bin:
+        rc = call([tar_bin, "-xJf", archive, "-C", dest, "--strip-components=1"])
+        if rc == 0:
+            return
+    mode = "r:xz" if archive.endswith(".xz") else "r:*"
+    with tarfile.open(archive, mode) as tf:
+        members = tf.getmembers()
+        if not members:
+            raise RuntimeError("empty node archive")
+        top = members[0].name.split("/", 1)[0]
+        for m in members:
+            if m.name == top or m.name == top + "/":
+                continue
+            if not m.name.startswith(top + "/"):
+                continue
+            m.name = m.name[len(top) + 1 :]
+            if not m.name:
+                continue
+            tf.extract(m, dest)
+
+
+def ensure_node():
+    """Install official Node.js binary into $WORKENV_PREFIX (no sudo).
+
+    coc.nvim requires node on PATH; workenv puts $WORKENV_PREFIX/bin first.
+    """
+    # Prefer an existing node on PATH if it already works.
+    existing = shutil.which("node")
+    prefix = workenv_prefix()
+    prefix_node = os.path.join(prefix, "bin", "node")
+    if os.path.isfile(prefix_node) and os.access(prefix_node, os.X_OK):
+        try:
+            ver = subprocess.check_output([prefix_node, "--version"], text=True).strip()
+            print("Node already in prefix:", prefix_node, ver)
+            return prefix_node
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    if existing:
+        try:
+            ver = subprocess.check_output([existing, "--version"], text=True).strip()
+            print("Using system node:", existing, ver)
+            return existing
+        except (OSError, subprocess.CalledProcessError):
+            pass
+
+    arch = _node_arch()
+    if not arch:
+        print("WARNING: no portable Node build for arch", platform.machine(),
+              "- install node manually for coc.nvim")
+        return None
+
+    tarball = "node-v{}-linux-{}.tar.xz".format(NODE_VER, arch)
+    url = "https://nodejs.org/dist/v{}/{}".format(NODE_VER, tarball)
+    print("Installing Node.js", NODE_VER, "->", prefix, "(no sudo)")
+    os.makedirs(prefix, exist_ok=True)
+    tmpdir = tempfile.mkdtemp(prefix="workenv-node-")
+    try:
+        archive = os.path.join(tmpdir, tarball)
+        download(url, archive)
+        _extract_tar_strip1(archive, prefix)
+    except Exception as e:
+        print("WARNING: Node.js install failed:", e)
+        return None
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    if os.path.isfile(prefix_node) and os.access(prefix_node, os.X_OK):
+        ver = subprocess.check_output([prefix_node, "--version"], text=True).strip()
+        print("Installed", prefix_node, ver)
+        # Ensure subsequent tool lookups in this process see it.
+        os.environ["PATH"] = os.path.join(prefix, "bin") + os.pathsep + os.environ.get("PATH", "")
+        return prefix_node
+    print("WARNING: node binary missing after extract:", prefix_node)
+    return None
+
+
+def ensure_coc_nvim():
+    """Clone coc.nvim release branch into ~/.vim/plugged (no :PlugInstall needed)."""
+    dest = os.path.join(home, ".vim", "plugged", "coc.nvim")
+    marker = os.path.join(dest, "autoload", "coc.vim")
+    if os.path.isfile(marker):
+        print("coc.nvim already present:", dest)
+        return dest
+
+    if shutil.which("git") is None:
+        print("WARNING: git not found; cannot install coc.nvim")
+        return None
+
+    parent = os.path.dirname(dest)
+    os.makedirs(parent, exist_ok=True)
+    if os.path.isdir(dest):
+        shutil.rmtree(dest)
+
+    url = "https://github.com/neoclide/coc.nvim.git"
+    print("Cloning coc.nvim (release) ->", dest)
+    rc = call(["git", "clone", "--depth", "1", "--branch", "release", url, dest])
+    if rc != 0 or not os.path.isfile(marker):
+        print("WARNING: coc.nvim clone failed")
+        return None
+    print("Installed coc.nvim")
+    return dest
+
+
+def _clangd_asset():
+    m = platform.machine().lower()
+    if m in ("x86_64", "amd64"):
+        return "clangd-linux-{}.zip".format(CLANGD_VER)
+    if m in ("aarch64", "arm64"):
+        return "clangd-linux-arm64-{}.zip".format(CLANGD_VER)
+    return None
+
+
+def ensure_clangd():
+    """Install official clangd release binary into $WORKENV_PREFIX/bin (no sudo)."""
+    if os.environ.get("SKIP_CLANGD") == "1":
+        print("SKIP_CLANGD=1 — not installing clangd")
+        return None
+
+    prefix = workenv_prefix()
+    prefix_clangd = os.path.join(prefix, "bin", "clangd")
+    if os.path.isfile(prefix_clangd) and os.access(prefix_clangd, os.X_OK):
+        print("clangd already in prefix:", prefix_clangd)
+        return prefix_clangd
+
+    existing = shutil.which("clangd")
+    if existing:
+        print("Using system clangd:", existing)
+        return existing
+
+    asset = _clangd_asset()
+    if not asset:
+        print("WARNING: no prebuilt clangd for arch", platform.machine())
+        return None
+
+    url = "https://github.com/clangd/clangd/releases/download/{}/{}".format(
+        CLANGD_VER, asset
+    )
+    print("Installing clangd", CLANGD_VER, "->", prefix, "(no sudo)")
+    os.makedirs(os.path.join(prefix, "bin"), exist_ok=True)
+    tmpdir = tempfile.mkdtemp(prefix="workenv-clangd-")
+    try:
+        archive = os.path.join(tmpdir, "clangd.zip")
+        download(url, archive)
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(tmpdir)
+        found = None
+        for root, _dirs, files in os.walk(tmpdir):
+            if "clangd" in files:
+                cand = os.path.join(root, "clangd")
+                if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                    found = cand
+                    break
+                if os.path.isfile(cand):
+                    found = cand
+        if not found:
+            print("WARNING: clangd binary not found after extract")
+            return None
+        shutil.copy2(found, prefix_clangd)
+        os.chmod(prefix_clangd, 0o755)
+    except Exception as e:
+        print("WARNING: clangd install failed:", e)
+        return None
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    if os.path.isfile(prefix_clangd) and os.access(prefix_clangd, os.X_OK):
+        try:
+            ver = subprocess.check_output(
+                [prefix_clangd, "--version"], text=True, stderr=subprocess.STDOUT
+            ).splitlines()[0]
+        except (OSError, subprocess.CalledProcessError):
+            ver = "(version unknown)"
+        print("Installed", prefix_clangd, "-", ver)
+        os.environ["PATH"] = os.path.join(prefix, "bin") + os.pathsep + os.environ.get(
+            "PATH", ""
+        )
+        return prefix_clangd
+    print("WARNING: clangd missing after install:", prefix_clangd)
+    return None
+
+
+def ensure_coc_settings(clangd_path=None):
+    """Write/update ~/.vim/coc-settings.json to point at a real clangd binary."""
+    coc_settings = os.path.join(home, ".vim", "coc-settings.json")
+    # Prefer absolute path so Vim/coc works even if PATH differs from the shell.
+    cmd = clangd_path or shutil.which("clangd") or "clangd"
+    desired = {
+        "languageserver": {
+            "clangd": {
+                "command": cmd,
+                "args": ["--background-index", "--clang-tidy"],
+                "rootPatterns": [
+                    "compile_commands.json",
+                    ".clangd",
+                    ".git",
+                    "CMakeLists.txt",
+                ],
+                "filetypes": ["c", "cc", "cpp", "c++", "objc", "objcpp", "cuda"],
+            }
+        },
+        "clangd.path": cmd,
+        "clangd.arguments": ["--background-index", "--clang-tidy"],
     }
-  },
-  "clangd.path": "clangd",
-  "clangd.arguments": ["--background-index", "--clang-tidy"]
-}
-""")
+
+    import json
+
+    os.makedirs(os.path.dirname(coc_settings), exist_ok=True)
+    if os.path.exists(coc_settings):
+        try:
+            with open(coc_settings, "r") as fd:
+                current = json.load(fd)
+        except Exception:
+            current = {}
+        # Update clangd command/path if missing, bare "clangd", or stale.
+        ls = current.setdefault("languageserver", {}).setdefault("clangd", {})
+        old_cmd = ls.get("command") or current.get("clangd.path")
+        needs = (
+            not old_cmd
+            or old_cmd == "clangd"
+            or (cmd != "clangd" and old_cmd != cmd and not os.path.isfile(str(old_cmd)))
+        )
+        if needs:
+            ls["command"] = cmd
+            ls.setdefault("args", ["--background-index", "--clang-tidy"])
+            ls.setdefault(
+                "rootPatterns",
+                ["compile_commands.json", ".clangd", ".git", "CMakeLists.txt"],
+            )
+            ls.setdefault(
+                "filetypes",
+                ["c", "cc", "cpp", "c++", "objc", "objcpp", "cuda"],
+            )
+            current["clangd.path"] = cmd
+            current.setdefault(
+                "clangd.arguments", ["--background-index", "--clang-tidy"]
+            )
+            with open(coc_settings, "w") as fd:
+                json.dump(current, fd, indent=2)
+                fd.write("\n")
+            print("Updated", coc_settings, "-> clangd", cmd)
+        else:
+            print("Leaving existing", coc_settings, "(clangd=%s)" % old_cmd)
+        return
+
+    with open(coc_settings, "w") as fd:
+        json.dump(desired, fd, indent=2)
+        fd.write("\n")
     print("Wrote", coc_settings)
+
+
+ensure_vim_plug()
+ensure_node()
+ensure_coc_nvim()
+_clangd = ensure_clangd()
+ensure_coc_settings(clangd_path=_clangd)
 
 pub_keys=[
 """ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDfajFQVE0SSeSSGVWtikBSi02La+0dyxFKBt85R5hcxmWuu1CUbtGnX9+TXPjGwgxVwACH8a0qSshCSupRpaXZcFiTXZWHhriadJpJ06OztJk/aiJ62sqESuWzSrCycZNPzCnPSkchG8Y/XBUJIrDRI4iSsA6VWxdt3sVuUY4uPAocQk1Gu23AHZuNQeWVbOh+MH83lofVOfy2UmDa32rnEhb02iEG+XIhM/UlAnthQn3TxnaMv1yuWLkws2RAckKPAYPIb7pXQx2ZKe+HuJn3TeQLcZnVnYPCv5wEiwZKLZuU//2F13GJlTvHcHRAhSVUPqrRSEno0EfgXqY+LDoN sbrandt@wothw2""",

@@ -83,6 +83,67 @@ install_vim_plug() {
   fi
 }
 
+# Official Node binary into PREFIX (coc.nvim needs it). No sudo.
+install_node() {
+  local node_ver="${NODE_VER:-22.18.0}"
+  if [[ -x "$PREFIX/bin/node" ]]; then
+    log "node already at $PREFIX/bin/node ($("$PREFIX/bin/node" --version 2>/dev/null))"
+    return 0
+  fi
+  if have node; then
+    log "node on PATH: $(command -v node) ($(node --version 2>/dev/null))"
+    return 0
+  fi
+  local asset=""
+  case "$(uname -m)" in
+    x86_64|amd64) asset="node-v${node_ver}-linux-x64.tar.xz" ;;
+    aarch64|arm64) asset="node-v${node_ver}-linux-arm64.tar.xz" ;;
+    *)
+      log "WARNING: no portable Node build for arch=$(uname -m); install node for coc.nvim"
+      return 0
+      ;;
+  esac
+  local url="https://nodejs.org/dist/v${node_ver}/${asset}"
+  log "Installing Node.js ${node_ver} -> $PREFIX (no sudo)"
+  mkdir -p "$BUILD_ROOT" "$PREFIX"
+  local archive="$BUILD_ROOT/$asset"
+  if have curl; then
+    curl -fL --progress-bar -o "$archive" "$url" || { log "WARNING: node download failed"; return 0; }
+  elif have wget; then
+    wget -q --show-progress -O "$archive" "$url" || { log "WARNING: node download failed"; return 0; }
+  else
+    log "WARNING: no curl/wget for node"
+    return 0
+  fi
+  tar -xJf "$archive" -C "$PREFIX" --strip-components=1 || {
+    log "WARNING: failed to extract $archive"
+    return 0
+  }
+  if [[ -x "$PREFIX/bin/node" ]]; then
+    log "Installed $PREFIX/bin/node ($("$PREFIX/bin/node" --version))"
+  else
+    log "WARNING: node binary missing after extract"
+  fi
+}
+
+# Clone coc.nvim so <Tab> mappings work without a manual :PlugInstall.
+install_coc_nvim() {
+  local dest="$HOME/.vim/plugged/coc.nvim"
+  if [[ -f "$dest/autoload/coc.vim" ]]; then
+    log "coc.nvim already present: $dest"
+    return 0
+  fi
+  have git || { log "WARNING: git required to install coc.nvim"; return 1; }
+  mkdir -p "$(dirname "$dest")"
+  rm -rf "$dest"
+  log "Cloning coc.nvim (release) -> $dest"
+  git clone --depth 1 --branch release https://github.com/neoclide/coc.nvim.git "$dest" || {
+    log "WARNING: coc.nvim clone failed"
+    return 1
+  }
+  log "Installed coc.nvim"
+}
+
 # Best-effort clangd: system binary, or official clangd release zip (much smaller than full LLVM).
 install_clangd() {
   if [[ "$SKIP_CLANGD" == "1" ]]; then
@@ -99,7 +160,7 @@ install_clangd() {
   fi
 
   # https://github.com/clangd/clangd/releases — linux x86_64 / arm64
-  local clangd_ver="${CLANGD_VER:-19.1.2}"
+  local clangd_ver="${CLANGD_VER:-22.1.6}"
   local asset=""
   case "$ARCH" in
     x86_64|amd64) asset="clangd-linux-${clangd_ver}.zip" ;;
@@ -215,7 +276,9 @@ if [[ "$NEED_BUILD" -eq 1 ]]; then
 fi
 
 install_vim_plug || true
+install_node || true
+install_coc_nvim || true
 write_coc_settings
 install_clangd || true
 
-log "Vim setup done. Open vim and run :PlugInstall once to fetch coc.nvim."
+log "Vim setup done (vim-plug + node + coc.nvim; no sudo / no :PlugInstall required)."
