@@ -1,9 +1,6 @@
 Host *
     ServerAliveInterval 300
     ServerAliveCountMax 2
-Host bitbucket.org
-    IdentityFile ~/.ssh/id_watannabe
-    IdentitiesOnly Yes
 Host openstack
     hostname 129.114.104.72
     user ubuntu
@@ -64,12 +61,11 @@ Host mcl
     hostname mclbatonrouge.org
 Host bounce
     hostname bounce.cct.lsu.edu
+    port 2525
+    user sbrandt
     #hostname mike.hpc.lsu.edu
     #stricthostkeychecking no
     #userknownhostsfile /dev/null
-    port 2525
-    user sbrandt
-    LogLevel Error
 Host vault
     hostname vault.cct.lsu.edu
     user sbrandt
@@ -82,7 +78,8 @@ Host vault.cct
     forwardx11 No
     HostKeyAlgorithms +ssh-rsa
     PubKeyAcceptedKeyTypes +ssh-rsa
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host etkmain
     hostname einsteintoolkit.org
     port 2525
@@ -98,11 +95,15 @@ Host agave2
 Host mel5
     hostname melete05.cct.lsu.edu
     port 2526
+    #StrictHostKeyChecking no
+    #userknownhostsfile /dev/null
     # Enable X-windows
     #remoteforward 127.0.0.1:6000 127.0.0.1:6000
     #localforward 127.0.0.1:445 melete05.cct.lsu.edu:4445
+    #localforward 127.0.0.1:8888 melete05.cct.lsu.edu:8888
     #localforward 127.0.0.1:9443 127.0.0.1:9443
     #localforward 127.0.0.1:9080 127.0.0.1:9080
+    #localforward 127.0.0.1:8004 127.0.0.1:8004
     #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
     ProxyJump bounce
 Host relay
@@ -110,7 +111,8 @@ Host relay
     port 2526
     remoteforward 127.0.0.1:6000 127.0.0.1:6000
     localforward 8587 relay.lsu.edu:587
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host melete05
     hostname melete05.cct.lsu.edu
     port 2526
@@ -143,8 +145,9 @@ Host steam
     user sbrandt
     port 2525
 Host rostam
-    remoteforward 127.0.0.1:6000 127.0.0.1:6000
+    #remoteforward 127.0.0.1:8000 127.0.0.1:8000
     hostname rostam.cct.lsu.edu
+    ProxyJump bounce
 Host rostam2
     hostname rostam2.cct.lsu.edu
     proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
@@ -224,7 +227,8 @@ Host etk
     user brandt
     hostname etk.cct.lsu.edu
     #localforward 127.0.0.1:1443 127.0.0.1:443
-    #proxycommand ssh -oStrictHostKeyChecking=no bouncem nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host etkall
     hostname bounce.cct.lsu.edu
     stricthostkeychecking no
@@ -235,12 +239,14 @@ Host etkall
 Host etk1
     user brandt
     hostname etk1.cct.lsu.edu
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host etk2
     user brandt
     hostname etk2.cct.lsu.edu
     #localforward 127.0.0.1:2443 etk2.cct.lsu.edu:443
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host hpxtut
     user brandt
     hostname hpx-tutorial.cct.lsu.edu
@@ -248,7 +254,8 @@ Host hpxtut
 Host etk3
     user brandt
     hostname etk3.cct.lsu.edu
-    proxycommand ssh -oStrictHostKeyChecking=no bouncem nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bouncem nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host etk4
     user brandt
     hostname etk4.cct.lsu.edu
@@ -272,6 +279,15 @@ Host coldfront
 Host qb4
     user sbrandt
     hostname qbd.loni.org
+Host qbd
+    user sbrandt
+    hostname qbd.loni.org
+Host qbd2
+    user sbrandt
+    hostname qbd2.loni.org
+Host qbd1
+    user sbrandt
+    hostname qbd1.loni.org
 Host qbc3
     user sbrandt
     hostname qbc3.loni.org
@@ -331,7 +347,8 @@ Host mcl
     User verouchi
 Host ll
     Hostname landlock.cct.lsu.edu
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    #proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
 Host flour
     Hostname flour.cct.lsu.edu
     proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
@@ -352,4 +369,25 @@ Host simfac
 Host fuka
     User brandt
     Hostname fuka.cct.lsu.edu
-    proxycommand ssh -oStrictHostKeyChecking=no bounce nc %h %p 2> /dev/null
+    ProxyJump bounce
+Host earth
+    User sbrandt
+    Hostname earth.perimeterinstitute.ca
+Host saturn
+    User sbrandt
+    Hostname saturn.perimeterinstitute.ca
+Host orthus
+    User sbrandt
+    Hostname orthus.nic.uoregon.edu
+Host dtai
+    User sbrandt
+    Hostname dtai-login.delta.ncsa.illinois.edu
+Host frontera
+    User tg457049
+    Hostname login1.frontera.tacc.utexas.edu
+Host stampede3
+    User tg457049
+    Hostname login1.stampede3.tacc.utexas.edu
+Host rhaas
+    User sbrandt
+    Hostname ekohaes8-ofc.ncsa.illinois.edu
