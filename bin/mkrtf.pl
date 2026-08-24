@@ -888,6 +888,8 @@ sub accent {
   $txt =~ s/<~a>/\\u227\\'e3/g;
   $txt =~ s/<'u>/\\u250\\'fa/g;
   $txt =~ s/<:o>/\\u246\\'f6/g;
+  $txt =~ s/ö/\\u246\\'f6/g;
+  $txt =~ s/Ö/\\u214\\'d6/g;
   $txt =~ s/<bullet>/{\\bullet}/g;
   $txt =~ s/\.\.\.+/{\\u8230\\'81}/g if($ellipsis);
   #$txt =~ s/\.\.\.+/{\\ellipsis}/g if($ellipsis);
