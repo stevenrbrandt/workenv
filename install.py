@@ -309,11 +309,14 @@ def workenv_prefix():
 
 
 # coc plug block written into ~/.vimrc (literal Vimscript).
+# coc.nvim uses Vim9 script and errors loudly on Vim 8.2 (AlmaLinux/RHEL 9).
+# Do not even Plug it unless Neovim 0.8+ or Vim 9.0.0438+ is present.
 VIM_COC_PLUG_BLOCK = """
 " coc.nvim + clangd (C/C++) via vim-plug when plug is installed.
 " Declare the plugin always so :PlugInstall works; only bind keys once
 " coc is actually present — otherwise <Tab> throws E117 instead of indenting.
-if filereadable(expand('~/.vim/autoload/plug.vim'))
+" Skip on old Vim: coc.nvim requires 9.0.0438+ (Vim9 script) or nvim 0.8+.
+if filereadable(expand('~/.vim/autoload/plug.vim')) && (has('nvim-0.8.0') || has('patch-9.0.0438'))
     call plug#begin()
     Plug 'neoclide/coc.nvim', {'branch': 'release'}
     call plug#end()
@@ -377,8 +380,35 @@ colorscheme LecturedInjury
 """.lstrip("\n").format(coc_block=VIM_COC_PLUG_BLOCK)
 
 
+def _replace_coc_plug_block(text):
+    """Swap the installed coc.nvim vim-plug block for VIM_COC_PLUG_BLOCK.
+
+    Callable repl so Vimscript backslashes (\\s, \\<Tab>) are not treated
+    as re template escapes.
+    """
+    def _coc_repl(_match):
+        return VIM_COC_PLUG_BLOCK
+
+    patched, n = re.subn(
+        r"\" coc\.nvim \+ clangd.*?\nendif\n",
+        _coc_repl,
+        text,
+        count=1,
+        flags=re.S,
+    )
+    if n == 0:
+        patched, n = re.subn(
+            r"if filereadable\(expand\('~/\.vim/autoload/plug\.vim'\)\).*?\nendif\n",
+            _coc_repl,
+            text,
+            count=1,
+            flags=re.S,
+        )
+    return patched, n
+
+
 def ensure_vimrc():
-    """Create ~/.vimrc or patch an unguarded coc <Tab> mapping."""
+    """Create ~/.vimrc or patch an unguarded / old-Vim coc.nvim block."""
     vimrc = os.path.join(home, ".vimrc")
     if not os.path.exists(vimrc):
         with open(vimrc, "w") as fd:
@@ -389,39 +419,20 @@ def ensure_vimrc():
     with open(vimrc, "r") as fd:
         text = fd.read()
 
-    has_tab_coc = "coc#pum#visible" in text and "inoremap" in text
     has_guard = "plugged/coc.nvim" in text and "isdirectory" in text
     has_plug = "neoclide/coc.nvim" in text
+    has_vim_ver = "patch-9.0.0438" in text
 
-    if has_tab_coc and not has_guard:
-        # Replace the old unguarded plug/coc block with the gated version.
-        # Use a callable repl so Vimscript backslashes (\s, \<Tab>) are not
-        # interpreted as re template escapes.
-        def _coc_repl(_match):
-            return VIM_COC_PLUG_BLOCK
-
-        patched, n = re.subn(
-            r"\" coc\.nvim \+ clangd.*?\nendif\n",
-            _coc_repl,
-            text,
-            count=1,
-            flags=re.S,
-        )
-        if n == 0:
-            patched, n = re.subn(
-                r"if filereadable\(expand\('~/\.vim/autoload/plug\.vim'\)\).*?\nendif\n",
-                _coc_repl,
-                text,
-                count=1,
-                flags=re.S,
-            )
+    if has_plug and (not has_guard or not has_vim_ver):
+        patched, n = _replace_coc_plug_block(text)
         if n:
             with open(vimrc, "w") as fd:
                 fd.write(patched)
-            print("Patched coc <Tab> guards in", vimrc)
+            print("Patched coc.nvim version/plugin guards in", vimrc)
         else:
             print("WARNING: could not auto-patch coc block in", vimrc,
-                  "- please gate <Tab> on ~/.vim/plugged/coc.nvim")
+                  "- please gate <Tab> on ~/.vim/plugged/coc.nvim"
+                  " and skip coc.nvim on Vim < 9.0.0438")
     elif not has_plug:
         # Append coc plug block before colorscheme / at end.
         insert_at = text.find("colorscheme ")
