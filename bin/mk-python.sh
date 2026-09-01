@@ -298,18 +298,34 @@ EOF
   cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/ffi_probe.c" -lffi -o "$BUILD_ROOT/ffi_probe" 2>/dev/null
 }
 
+# Export LIBFFI_CFLAGS / LIBFFI_LIBS for Python's configure (in addition to CPPFLAGS).
+set_libffi_env_from_pkgconfig_or_prefix() {
+  local cflags="" libs=""
+  if have pkg-config && pkg-config --exists libffi; then
+    cflags="$(pkg-config --cflags libffi 2>/dev/null || true)"
+    libs="$(pkg-config --libs libffi 2>/dev/null || true)"
+    log "  pkg-config libffi: $(pkg-config --modversion libffi)"
+  elif [[ -r "$PREFIX/include/ffi.h" ]] || ls "$PREFIX"/lib/libffi-*/include/ffi.h >/dev/null 2>&1; then
+    # libffi often installs headers under lib/libffi-X.Y/include/
+    local inc="$PREFIX/include"
+    local nested
+    nested="$(ls -d "$PREFIX"/lib/libffi-*/include 2>/dev/null | head -1 || true)"
+    [[ -n "$nested" ]] && inc="$nested"
+    cflags="-I$inc"
+    libs="-L$PREFIX/lib -L$PREFIX/lib64 -lffi"
+  fi
+  if [[ -n "$cflags" || -n "$libs" ]]; then
+    export CPPFLAGS="$cflags $CPPFLAGS"
+    export LDFLAGS="$libs $LDFLAGS"
+    export LIBFFI_CFLAGS="$cflags"
+    export LIBFFI_LIBS="$libs"
+  fi
+}
+
 ensure_libffi() {
   if ffi_usable; then
     log "libffi available (system or prefix)"
-    if have pkg-config && pkg-config --exists libffi; then
-      log "  pkg-config libffi: $(pkg-config --modversion libffi)"
-      # Merge system cflags/libs so Python configure finds multiarch headers
-      local cflags libs
-      cflags="$(pkg-config --cflags libffi 2>/dev/null || true)"
-      libs="$(pkg-config --libs libffi 2>/dev/null || true)"
-      export CPPFLAGS="$cflags $CPPFLAGS"
-      export LDFLAGS="$libs $LDFLAGS"
-    fi
+    set_libffi_env_from_pkgconfig_or_prefix
     return 0
   fi
 
@@ -326,6 +342,7 @@ ensure_libffi() {
   export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
   export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
   export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+  set_libffi_env_from_pkgconfig_or_prefix
   ffi_usable || die "libffi still not usable after local build"
   log "libffi installed to $PREFIX"
 }
@@ -731,29 +748,68 @@ log "configure --prefix=$PREFIX --with-openssl=$OPENSSL_DIR ..."
   CPPFLAGS="$CPPFLAGS" \
   LDFLAGS="$LDFLAGS" \
   ${BZIP2_CFLAGS:+BZIP2_CFLAGS="$BZIP2_CFLAGS"} \
-  ${BZIP2_LIBS:+BZIP2_LIBS="$BZIP2_LIBS"}
+  ${BZIP2_LIBS:+BZIP2_LIBS="$BZIP2_LIBS"} \
+  ${LIBFFI_CFLAGS:+LIBFFI_CFLAGS="$LIBFFI_CFLAGS"} \
+  ${LIBFFI_LIBS:+LIBFFI_LIBS="$LIBFFI_LIBS"}
 
 log "Building (make -j$NPROC) ..."
 make -j"$NPROC"
 
+# Resolve EXT_SUFFIX from the build Makefile (e.g. .cpython-313-x86_64-linux-gnu.so).
+ext_suffix() {
+  local s
+  s="$(sed -n 's/^EXT_SUFFIX=[[:space:]]*//p' Makefile 2>/dev/null | head -1)"
+  # Fallback: pick any built module's suffix
+  if [[ -z "$s" ]]; then
+    s="$(basename "$(ls -1 Modules/math.cpython-*.so 2>/dev/null | head -1)" | sed 's/^math//')"
+  fi
+  printf '%s' "$s"
+}
+
 # Python 3.12+ can list a shared module for install even when the .so was never
 # built (e.g. optional dep missing mid-build). sharedinstall then aborts with
-# "cannot stat 'Modules/_bz2….so'". Drop missing entries from SHAREDMODS.
+# "cannot stat 'Modules/_bz2….so'". Drop only those missing entries.
+#
+# IMPORTANT: Makefile SHAREDMODS uses Modules/foo$(EXT_SUFFIX) — expand that
+# before testing -f. Treating $(EXT_SUFFIX) literally emptied SHAREDMODS and
+# installed a Python with no C extensions (_ctypes, _posixsubprocess, …).
 filter_missing_sharedmods() {
   local mf=Makefile
   [[ -f "$mf" ]] || return 0
-  local line mods m new=()
+  local suffix line mods m path new=() required_missing=()
+  suffix="$(ext_suffix)"
+  [[ -n "$suffix" ]] || {
+    log "WARNING: could not determine EXT_SUFFIX; skipping SHAREDMODS filter"
+    return 0
+  }
   line="$(grep '^SHAREDMODS=' "$mf" | head -1 || true)"
   [[ -n "$line" ]] || return 0
   mods="${line#SHAREDMODS=}"
   for m in $mods; do
-    if [[ -f "$m" ]]; then
+    path="${m//'$(EXT_SUFFIX)'/$suffix}"
+    # Also accept already-expanded paths
+    if [[ -f "$path" || -f "$m" ]]; then
       new+=("$m")
     else
-      log "WARNING: omitting missing shared module from install: $m"
+      case "$path" in
+        */_ctypes"$suffix"|*/_posixsubprocess"$suffix"|*/_ssl"$suffix"|*/_lzma"$suffix"|*/_sqlite3"$suffix"|*/_bz2"$suffix")
+          required_missing+=("$path")
+          ;;
+        *)
+          log "WARNING: omitting missing optional shared module from install: $path"
+          ;;
+      esac
     fi
   done
-  # Rewrite SHAREDMODS= (first occurrence only)
+  if ((${#required_missing[@]})); then
+    log "ERROR: required extension(s) missing after make:"
+    local r
+    for r in "${required_missing[@]}"; do
+      log "  - $r"
+    done
+    log "  Check config.log / build output for libffi, openssl, xz, sqlite, bzip2."
+    die "required Python C extensions failed to build (see above)"
+  fi
   local tmp="$BUILD_ROOT/Makefile.sharedmods"
   awk -v repl="SHAREDMODS=${new[*]}" '
     BEGIN { done=0 }
@@ -762,6 +818,30 @@ filter_missing_sharedmods() {
   ' "$mf" >"$tmp"
   mv "$tmp" "$mf"
 }
+
+# Hard check: required .so files must exist in the build tree before install.
+require_built_module() {
+  local name="$1"
+  local suffix="$2"
+  local so="Modules/${name}${suffix}"
+  if [[ ! -f "$so" ]]; then
+    # ctypes objects live under Modules/_ctypes/ but the .so is Modules/_ctypes.so
+    log "ERROR: $so was not built"
+    return 1
+  fi
+  log "  built $so"
+  return 0
+}
+
+_EXT_SUFFIX="$(ext_suffix)"
+[[ -n "$_EXT_SUFFIX" ]] || die "EXT_SUFFIX unknown after make; cannot verify extensions"
+log "EXT_SUFFIX=$_EXT_SUFFIX"
+require_built_module "_posixsubprocess" "$_EXT_SUFFIX" || die "_posixsubprocess missing — stdlib build is broken"
+require_built_module "_ctypes" "$_EXT_SUFFIX" || die "_ctypes missing — libffi not found/linked; see ensure_libffi / config.log"
+require_built_module "_ssl" "$_EXT_SUFFIX" || die "_ssl missing — OpenSSL not found/linked; see ensure_openssl / config.log"
+require_built_module "_lzma" "$_EXT_SUFFIX" || die "_lzma missing — liblzma not found/linked; see ensure_liblzma / config.log"
+require_built_module "_sqlite3" "$_EXT_SUFFIX" || die "_sqlite3 missing — sqlite3 not found/linked; see ensure_sqlite / config.log"
+require_built_module "_bz2" "$_EXT_SUFFIX" || die "_bz2 missing — libbz2 not found/linked; see ensure_bzip2 / config.log"
 
 filter_missing_sharedmods
 
