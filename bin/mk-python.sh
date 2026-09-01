@@ -157,6 +157,107 @@ with_system_libs() {
   env "${envargs[@]}" "$@"
 }
 
+# Cluster "module" trees (e.g. /usr/local/packages/python/3.7.6) often provide
+# libffi/ssl/sqlite/bz2 via pkg-config. Linking against them succeeds, but
+# Python's RUNSHARED LD_LIBRARY_PATH is only builddir+PREFIX — import checks
+# then fail with "libbz2.so.1.0: cannot open shared object file" and the
+# successfully-built _bz2.so is deleted. Only trust PREFIX + distro paths.
+is_portable_prefix() {
+  local p="${1%/}"
+  case "$p" in
+    "$PREFIX"|"$PREFIX"/*) return 0 ;;
+    /usr/local/packages|/usr/local/packages/*) return 1 ;;
+    /usr/local/Modules|/usr/local/Modules/*) return 1 ;;
+    /opt/ohpc|/opt/ohpc/*) return 1 ;;
+    /opt/intel|/opt/intel/*) return 1 ;;
+    /usr|/usr/lib|/usr/lib64|/usr/lib/*|/usr/lib64/*|/usr/include|/usr/include/*) return 0 ;;
+    /usr/local|/usr/local/lib|/usr/local/lib64|/usr/local/include) return 0 ;;
+    /usr/local/lib/*|/usr/local/lib64/*|/usr/local/include/*)
+      # Allow normal /usr/local installs; reject module-style trees above.
+      return 0
+      ;;
+    /lib|/lib64|/lib/*|/lib64/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# PKG_CONFIG_PATH / LD_LIBRARY_PATH limited to PREFIX + distro locations.
+portable_pkg_config_path() {
+  local p out=""
+  local IFS=':'
+  for p in ${PKG_CONFIG_PATH-}; do
+    [[ -z "$p" ]] && continue
+    case "$p" in
+      "$PREFIX"/*|/usr/lib/pkgconfig|/usr/lib64/pkgconfig|/usr/share/pkgconfig|/usr/local/lib/pkgconfig|/usr/local/lib64/pkgconfig|/usr/lib/*/pkgconfig)
+        out="${out:+$out:}$p"
+        ;;
+    esac
+  done
+  # Always prefer PREFIX entries first
+  printf '%s' "$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${out:+:$out}"
+}
+
+portable_ld_library_path() {
+  printf '%s' "$PREFIX/lib:$PREFIX/lib64:/usr/lib64:/usr/lib:/lib64:/lib"
+}
+
+# Run a command as the Python build will see libs at extension-import time.
+with_portable_libs() {
+  env LD_LIBRARY_PATH="$(portable_ld_library_path)" \
+      PKG_CONFIG_PATH="$(portable_pkg_config_path)" \
+      "$@"
+}
+
+# True if pkg-config package resolves to a portable prefix.
+pkg_config_portable() {
+  local pc="$1"
+  shift || true
+  have pkg-config || return 1
+  with_portable_libs pkg-config --exists "$pc" 2>/dev/null || return 1
+  local pref
+  pref="$(with_portable_libs pkg-config --variable=prefix "$pc" 2>/dev/null || true)"
+  [[ -n "$pref" ]] || return 1
+  is_portable_prefix "$pref" || return 1
+  if (($#)); then
+    with_portable_libs pkg-config "$@" "$pc"
+  fi
+  return 0
+}
+
+# Drop non-portable entries from the ambient PKG_CONFIG_PATH / LD_LIBRARY_PATH
+# so later probes and Python configure do not pick up cluster module libs.
+scrub_nonportable_lib_env() {
+  local p out_pc="" out_ld=""
+  local IFS=':'
+  for p in ${PKG_CONFIG_PATH-}; do
+    [[ -z "$p" ]] && continue
+    case "$p" in
+      "$PREFIX"/*|/usr/lib/pkgconfig|/usr/lib64/pkgconfig|/usr/share/pkgconfig|/usr/local/lib/pkgconfig|/usr/local/lib64/pkgconfig|/usr/lib/*/pkgconfig)
+        out_pc="${out_pc:+$out_pc:}$p"
+        ;;
+      *)
+        log "Ignoring non-portable PKG_CONFIG_PATH entry: $p"
+        ;;
+    esac
+  done
+  for p in ${LD_LIBRARY_PATH-}; do
+    [[ -z "$p" ]] && continue
+    if is_portable_prefix "$p" || [[ "$p" == "$PREFIX/lib" || "$p" == "$PREFIX/lib64" ]]; then
+      case "$p" in
+        /usr/local/packages/*|/usr/local/Modules/*|/opt/ohpc/*)
+          log "Ignoring non-portable LD_LIBRARY_PATH entry: $p"
+          continue
+          ;;
+      esac
+      out_ld="${out_ld:+$out_ld:}$p"
+    else
+      log "Ignoring non-portable LD_LIBRARY_PATH entry: $p"
+    fi
+  done
+  export PKG_CONFIG_PATH="$out_pc"
+  export LD_LIBRARY_PATH="$out_ld"
+}
+
 # Download url → out. Clears bad CA env, tries verify, then insecure bootstrap.
 download() {
   local url="$1" out="$2"
@@ -278,15 +379,20 @@ export PATH="$PREFIX/bin:$PATH"
 # older bundled libssl. Prefer RUNPATH on installed binaries for runtime.
 export LD_LIBRARY_PATH="$PREFIX/lib:$PREFIX/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+# Drop cluster-module pkg-config / lib paths (e.g. .../packages/python/3.7.6)
+# before probing deps — those libs are invisible to Python's RUNSHARED.
+scrub_nonportable_lib_env
+export LD_LIBRARY_PATH="$PREFIX/lib:$PREFIX/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export CPPFLAGS="-I$PREFIX/include ${CPPFLAGS:-}"
 export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 ${LDFLAGS:-}"
 
 # --- libffi (required for _ctypes) ---
 ffi_usable() {
-  if have pkg-config && pkg-config --exists libffi; then
+  if pkg_config_portable libffi; then
     return 0
   fi
-  # Compiler can see ffi.h and link -lffi (system multiarch paths)
+  # Compiler can see ffi.h and link -lffi via PREFIX or distro paths only
   cat >"$BUILD_ROOT/ffi_probe.c" <<'EOF'
 #include <ffi.h>
 int main(void) {
@@ -295,16 +401,18 @@ int main(void) {
   return 0;
 }
 EOF
-  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/ffi_probe.c" -lffi -o "$BUILD_ROOT/ffi_probe" 2>/dev/null
+  # shellcheck disable=SC2086
+  with_portable_libs cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/ffi_probe.c" -lffi -o "$BUILD_ROOT/ffi_probe" 2>/dev/null \
+    && with_portable_libs "$BUILD_ROOT/ffi_probe" >/dev/null 2>&1
 }
 
 # Export LIBFFI_CFLAGS / LIBFFI_LIBS for Python's configure (in addition to CPPFLAGS).
 set_libffi_env_from_pkgconfig_or_prefix() {
   local cflags="" libs=""
-  if have pkg-config && pkg-config --exists libffi; then
-    cflags="$(pkg-config --cflags libffi 2>/dev/null || true)"
-    libs="$(pkg-config --libs libffi 2>/dev/null || true)"
-    log "  pkg-config libffi: $(pkg-config --modversion libffi)"
+  if pkg_config_portable libffi; then
+    cflags="$(with_portable_libs pkg-config --cflags libffi 2>/dev/null || true)"
+    libs="$(with_portable_libs pkg-config --libs libffi 2>/dev/null || true)"
+    log "  pkg-config libffi: $(with_portable_libs pkg-config --modversion libffi)"
   elif [[ -r "$PREFIX/include/ffi.h" ]] || ls "$PREFIX"/lib/libffi-*/include/ffi.h >/dev/null 2>&1; then
     # libffi often installs headers under lib/libffi-X.Y/include/
     local inc="$PREFIX/include"
@@ -491,7 +599,7 @@ lzma_usable() {
        ls "$PREFIX"/lib/liblzma.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/liblzma.so* >/dev/null 2>&1; }; then
     return 0
   fi
-  if have pkg-config && pkg-config --exists liblzma; then
+  if pkg_config_portable liblzma; then
     return 0
   fi
   cat >"$BUILD_ROOT/lzma_probe.c" <<'EOF'
@@ -501,17 +609,18 @@ int main(void) {
 }
 EOF
   # shellcheck disable=SC2086
-  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/lzma_probe.c" -llzma -o "$BUILD_ROOT/lzma_probe" 2>/dev/null
+  with_portable_libs cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/lzma_probe.c" -llzma -o "$BUILD_ROOT/lzma_probe" 2>/dev/null \
+    && with_portable_libs "$BUILD_ROOT/lzma_probe" >/dev/null 2>&1
 }
 
 ensure_liblzma() {
   if lzma_usable; then
     log "liblzma available (system or prefix)"
-    if have pkg-config && pkg-config --exists liblzma; then
-      log "  pkg-config liblzma: $(pkg-config --modversion liblzma)"
+    if pkg_config_portable liblzma; then
+      log "  pkg-config liblzma: $(with_portable_libs pkg-config --modversion liblzma)"
       local cflags libs
-      cflags="$(pkg-config --cflags liblzma 2>/dev/null || true)"
-      libs="$(pkg-config --libs liblzma 2>/dev/null || true)"
+      cflags="$(with_portable_libs pkg-config --cflags liblzma 2>/dev/null || true)"
+      libs="$(with_portable_libs pkg-config --libs liblzma 2>/dev/null || true)"
       export CPPFLAGS="$cflags $CPPFLAGS"
       export LDFLAGS="$libs $LDFLAGS"
     elif [[ -r "$PREFIX/include/lzma.h" ]]; then
@@ -555,7 +664,7 @@ sqlite_usable() {
        ls "$PREFIX"/lib/libsqlite3.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libsqlite3.so* >/dev/null 2>&1; }; then
     return 0
   fi
-  if have pkg-config && pkg-config --exists sqlite3; then
+  if pkg_config_portable sqlite3; then
     return 0
   fi
   cat >"$BUILD_ROOT/sqlite_probe.c" <<'EOF'
@@ -565,17 +674,18 @@ int main(void) {
 }
 EOF
   # shellcheck disable=SC2086
-  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/sqlite_probe.c" -lsqlite3 -o "$BUILD_ROOT/sqlite_probe" 2>/dev/null
+  with_portable_libs cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/sqlite_probe.c" -lsqlite3 -o "$BUILD_ROOT/sqlite_probe" 2>/dev/null \
+    && with_portable_libs "$BUILD_ROOT/sqlite_probe" >/dev/null 2>&1
 }
 
 ensure_sqlite() {
   if sqlite_usable; then
     log "sqlite3 available (system or prefix)"
-    if have pkg-config && pkg-config --exists sqlite3; then
-      log "  pkg-config sqlite3: $(pkg-config --modversion sqlite3)"
+    if pkg_config_portable sqlite3; then
+      log "  pkg-config sqlite3: $(with_portable_libs pkg-config --modversion sqlite3)"
       local cflags libs
-      cflags="$(pkg-config --cflags sqlite3 2>/dev/null || true)"
-      libs="$(pkg-config --libs sqlite3 2>/dev/null || true)"
+      cflags="$(with_portable_libs pkg-config --cflags sqlite3 2>/dev/null || true)"
+      libs="$(with_portable_libs pkg-config --libs sqlite3 2>/dev/null || true)"
       export CPPFLAGS="$cflags $CPPFLAGS"
       export LDFLAGS="$libs $LDFLAGS"
     elif [[ -r "$PREFIX/include/sqlite3.h" ]]; then
@@ -623,13 +733,28 @@ ensure_sqlite() {
 ensure_sqlite
 
 # --- bzip2 / libbz2 (needed for _bz2; missing .so breaks make sharedinstall) ---
+# Python's extension import check needs libbz2.so.1.0 visible via PREFIX/lib.
+bzip2_soname_ok() {
+  # Shared object with the soname Python's _bz2 typically needs
+  [[ -e "$PREFIX/lib/libbz2.so.1.0" || -e "$PREFIX/lib64/libbz2.so.1.0" ]] \
+    || [[ -e "$PREFIX/lib/libbz2.so.1.0.8" || -e "$PREFIX/lib64/libbz2.so.1.0.8" ]]
+}
+
 bzip2_usable() {
-  if [[ -r "$PREFIX/include/bzlib.h" ]] && \
-     { [[ -e "$PREFIX/lib/libbz2.so" ]] || [[ -e "$PREFIX/lib64/libbz2.so" ]] || \
-       ls "$PREFIX"/lib/libbz2.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libbz2.so* >/dev/null 2>&1 || \
-       [[ -e "$PREFIX/lib/libbz2.a" ]] || [[ -e "$PREFIX/lib64/libbz2.a" ]]; }; then
-    return 0
+  # Prefer a PREFIX install that is loadable the way RUNSHARED will see it.
+  if [[ -r "$PREFIX/include/bzlib.h" ]] && bzip2_soname_ok; then
+    cat >"$BUILD_ROOT/bz2_probe.c" <<'EOF'
+#include <bzlib.h>
+int main(void) { return 0; }
+EOF
+    # shellcheck disable=SC2086
+    if with_portable_libs cc -I"$PREFIX/include" -L"$PREFIX/lib" -L"$PREFIX/lib64" \
+         "$BUILD_ROOT/bz2_probe.c" -lbz2 -o "$BUILD_ROOT/bz2_probe" 2>/dev/null \
+       && with_portable_libs "$BUILD_ROOT/bz2_probe" >/dev/null 2>&1; then
+      return 0
+    fi
   fi
+  # Distro libbz2 only (not cluster module trees)
   cat >"$BUILD_ROOT/bz2_probe.c" <<'EOF'
 #include <bzlib.h>
 int main(void) {
@@ -637,13 +762,30 @@ int main(void) {
 }
 EOF
   # shellcheck disable=SC2086
-  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/bz2_probe.c" -lbz2 -o "$BUILD_ROOT/bz2_probe" 2>/dev/null
+  with_portable_libs cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/bz2_probe.c" -lbz2 -o "$BUILD_ROOT/bz2_probe" 2>/dev/null \
+    && with_portable_libs "$BUILD_ROOT/bz2_probe" >/dev/null 2>&1
+}
+
+ensure_prefix_bzip2_symlinks() {
+  mkdir -p "$PREFIX/lib"
+  local so=""
+  so="$(ls -1 "$PREFIX"/lib/libbz2.so.1.0.[0-9]* 2>/dev/null | head -1 || true)"
+  if [[ -z "$so" ]]; then
+    so="$(ls -1 "$PREFIX"/lib/libbz2.so.[0-9]* 2>/dev/null | head -1 || true)"
+  fi
+  [[ -n "$so" ]] || return 1
+  local base
+  base="$(basename "$so")"
+  # Soname expected by bzip2 shared builds / _bz2
+  ln -sfn "$base" "$PREFIX/lib/libbz2.so.1.0"
+  ln -sfn "libbz2.so.1.0" "$PREFIX/lib/libbz2.so"
+  return 0
 }
 
 ensure_bzip2() {
   if bzip2_usable; then
-    log "libbz2 available (system or prefix)"
-    if [[ -r "$PREFIX/include/bzlib.h" ]]; then
+    log "libbz2 available (portable system or prefix)"
+    if [[ -r "$PREFIX/include/bzlib.h" ]] && bzip2_soname_ok; then
       export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
       export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
       export BZIP2_CFLAGS="-I$PREFIX/include"
@@ -652,7 +794,8 @@ ensure_bzip2() {
     return 0
   fi
 
-  log "libbz2 not found; building bzip2 $BZIP2_VER into $PREFIX (no root)"
+  log "libbz2 not found in PREFIX/distro paths; building bzip2 $BZIP2_VER into $PREFIX (no root)"
+  log "  (cluster module libs like .../packages/python/*/lib are ignored — invisible to RUNSHARED)"
   local tarball="bzip2-${BZIP2_VER}.tar.gz"
   # sourceware is canonical; OSUOSL mirrors the same tarball layout
   local url="https://sourceware.org/pub/bzip2/${tarball}"
@@ -680,24 +823,24 @@ ensure_bzip2() {
   make clean
   make CFLAGS="-fPIC -O2 -g -D_FILE_OFFSET_BITS=64" -j"$NPROC"
   make install PREFIX="$PREFIX" CFLAGS="-fPIC -O2 -g -D_FILE_OFFSET_BITS=64"
-  # Ensure the unversioned linker name exists.
-  if [[ ! -e "$PREFIX/lib/libbz2.so" ]]; then
-    local so=""
-    so="$(ls -1 "$PREFIX"/lib/libbz2.so.1.0.* 2>/dev/null | head -1 || true)"
-    if [[ -z "$so" ]]; then
-      so="$(ls -1 "$PREFIX"/lib/libbz2.so.* 2>/dev/null | head -1 || true)"
-    fi
-    if [[ -n "$so" ]]; then
-      ln -sfn "$(basename "$so")" "$PREFIX/lib/libbz2.so.1.0"
-      ln -sfn "libbz2.so.1.0" "$PREFIX/lib/libbz2.so"
-    fi
-  fi
+  ensure_prefix_bzip2_symlinks || die "libbz2 shared library missing after install"
+  # Prove the soname is loadable the way Python's import check will see it
+  cat >"$BUILD_ROOT/bz2_probe2.c" <<'EOF'
+#include <bzlib.h>
+int main(void) { return 0; }
+EOF
+  # shellcheck disable=SC2086
+  with_portable_libs cc -I"$PREFIX/include" -L"$PREFIX/lib" -L"$PREFIX/lib64" \
+    "$BUILD_ROOT/bz2_probe2.c" -lbz2 -o "$BUILD_ROOT/bz2_probe2" \
+    || die "failed to link probe against PREFIX libbz2"
+  with_portable_libs "$BUILD_ROOT/bz2_probe2" \
+    || die "PREFIX libbz2.so.1.0 not loadable (check symlinks under $PREFIX/lib)"
   export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
   export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
   export BZIP2_CFLAGS="-I$PREFIX/include"
   export BZIP2_LIBS="-L$PREFIX/lib -L$PREFIX/lib64 -lbz2"
   bzip2_usable || die "libbz2 still not usable after local build"
-  log "libbz2 installed to $PREFIX"
+  log "libbz2 installed to $PREFIX (libbz2.so.1.0 -> $(readlink -f "$PREFIX/lib/libbz2.so.1.0" 2>/dev/null || echo '?'))"
 }
 
 ensure_bzip2
@@ -841,7 +984,9 @@ require_built_module "_ctypes" "$_EXT_SUFFIX" || die "_ctypes missing — libffi
 require_built_module "_ssl" "$_EXT_SUFFIX" || die "_ssl missing — OpenSSL not found/linked; see ensure_openssl / config.log"
 require_built_module "_lzma" "$_EXT_SUFFIX" || die "_lzma missing — liblzma not found/linked; see ensure_liblzma / config.log"
 require_built_module "_sqlite3" "$_EXT_SUFFIX" || die "_sqlite3 missing — sqlite3 not found/linked; see ensure_sqlite / config.log"
-require_built_module "_bz2" "$_EXT_SUFFIX" || die "_bz2 missing — libbz2 not found/linked; see ensure_bzip2 / config.log"
+if ! require_built_module "_bz2" "$_EXT_SUFFIX"; then
+  die "_bz2 missing — often built then deleted when libbz2.so.1.0 is not on RUNSHARED (cluster module libs). See ensure_bzip2 / config.log"
+fi
 
 filter_missing_sharedmods
 
