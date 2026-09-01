@@ -24,6 +24,10 @@ PYTHON_OPTIMIZE=0 ./install.sh
 # builds it into the platform prefix when missing (or OPENSSL_BUNDLE=1).
 # For apptainer/cluster images with no libssl, force a self-contained build:
 OPENSSL_BUNDLE=1 PYTHON_OPTIMIZE=0 ./install.sh --force-python
+
+# mk-python also bundles libffi / xz / sqlite / bzip2 into the prefix when the
+# host lacks them (no sudo). Missing libbz2 used to abort `make altinstall` on
+# Python 3.13 (`cannot stat Modules/_bz2….so`).
 ```
 
 Layout:

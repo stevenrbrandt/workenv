@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build Python into a platform-specific prefix under workenv (no root required).
-# Ensures libffi (_ctypes), OpenSSL (ssl), liblzma (_lzma), and sqlite3 (_sqlite3)
-# — system or built into prefix. These are stdlib C modules; pip cannot add them.
+# Ensures libffi (_ctypes), OpenSSL (ssl), liblzma (_lzma), sqlite3 (_sqlite3),
+# and libbz2 (_bz2) — system or built into prefix. These are stdlib C modules;
+# pip cannot add them. Missing libbz2 also breaks `make altinstall` on 3.13.
 #
 # Usage:
 #   mk-python.sh              # install PY_VER (default 3.13.14) if needed
@@ -27,6 +28,9 @@ OPENSSL_VER="${OPENSSL_VER:-3.0.15}"
 OPENSSL_BUNDLE="${OPENSSL_BUNDLE:-0}"
 # liblzma / xz (Python _lzma module — required by nrpy and many scientific packages)
 XZ_VER="${XZ_VER:-5.6.3}"
+# bzip2 / libbz2 (Python _bz2). Without it, Python 3.13 make altinstall can fail:
+#   install: cannot stat 'Modules/_bz2.cpython-…so': No such file or directory
+BZIP2_VER="${BZIP2_VER:-1.0.8}"
 # SQLite autoconf amalgamation year + version id (see https://www.sqlite.org/download.html)
 # 3490100 = 3.49.1 — override with SQLITE_YEAR / SQLITE_VER if a URL 404s
 SQLITE_YEAR="${SQLITE_YEAR:-2025}"
@@ -601,6 +605,86 @@ ensure_sqlite() {
 
 ensure_sqlite
 
+# --- bzip2 / libbz2 (needed for _bz2; missing .so breaks make sharedinstall) ---
+bzip2_usable() {
+  if [[ -r "$PREFIX/include/bzlib.h" ]] && \
+     { [[ -e "$PREFIX/lib/libbz2.so" ]] || [[ -e "$PREFIX/lib64/libbz2.so" ]] || \
+       ls "$PREFIX"/lib/libbz2.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libbz2.so* >/dev/null 2>&1 || \
+       [[ -e "$PREFIX/lib/libbz2.a" ]] || [[ -e "$PREFIX/lib64/libbz2.a" ]]; }; then
+    return 0
+  fi
+  cat >"$BUILD_ROOT/bz2_probe.c" <<'EOF'
+#include <bzlib.h>
+int main(void) {
+  return 0;
+}
+EOF
+  # shellcheck disable=SC2086
+  cc $CPPFLAGS $LDFLAGS "$BUILD_ROOT/bz2_probe.c" -lbz2 -o "$BUILD_ROOT/bz2_probe" 2>/dev/null
+}
+
+ensure_bzip2() {
+  if bzip2_usable; then
+    log "libbz2 available (system or prefix)"
+    if [[ -r "$PREFIX/include/bzlib.h" ]]; then
+      export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+      export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+      export BZIP2_CFLAGS="-I$PREFIX/include"
+      export BZIP2_LIBS="-L$PREFIX/lib -L$PREFIX/lib64 -lbz2"
+    fi
+    return 0
+  fi
+
+  log "libbz2 not found; building bzip2 $BZIP2_VER into $PREFIX (no root)"
+  local tarball="bzip2-${BZIP2_VER}.tar.gz"
+  # sourceware is canonical; OSUOSL mirrors the same tarball layout
+  local url="https://sourceware.org/pub/bzip2/${tarball}"
+  local url_alt="https://ftp.osuosl.org/pub/clfs/conglomeration/bzip2/${tarball}"
+  cd "$BUILD_ROOT"
+  if ! download "$url" "$tarball"; then
+    log "primary bzip2 URL failed; trying OSUOSL mirror"
+    download "$url_alt" "$tarball" || die "failed to download bzip2 $BZIP2_VER"
+  fi
+  tar -xzf "$tarball"
+  local srcdir=""
+  if [[ -d "bzip2-${BZIP2_VER}" ]]; then
+    srcdir="bzip2-${BZIP2_VER}"
+  else
+    srcdir="$(find . -maxdepth 1 -type d -name 'bzip2*' | head -1 | sed 's|^\./||')"
+  fi
+  [[ -n "$srcdir" && -d "$srcdir" ]] || die "bzip2 source dir not found after extract"
+  cd "$srcdir"
+  mkdir -p "$PREFIX/lib" "$PREFIX/include"
+  # Shared lib first (Python links -lbz2 as .so). Copy .so out before `make clean`
+  # (main Makefile clean is usually fine, but Makefile-libbz2_so clean removes .so).
+  # -fPIC required so objects can participate in shared module links.
+  make -f Makefile-libbz2_so CFLAGS="-fPIC -O2 -g -D_FILE_OFFSET_BITS=64" -j"$NPROC"
+  cp -a libbz2.so* "$PREFIX/lib/" 2>/dev/null || true
+  make clean
+  make CFLAGS="-fPIC -O2 -g -D_FILE_OFFSET_BITS=64" -j"$NPROC"
+  make install PREFIX="$PREFIX" CFLAGS="-fPIC -O2 -g -D_FILE_OFFSET_BITS=64"
+  # Ensure the unversioned linker name exists.
+  if [[ ! -e "$PREFIX/lib/libbz2.so" ]]; then
+    local so=""
+    so="$(ls -1 "$PREFIX"/lib/libbz2.so.1.0.* 2>/dev/null | head -1 || true)"
+    if [[ -z "$so" ]]; then
+      so="$(ls -1 "$PREFIX"/lib/libbz2.so.* 2>/dev/null | head -1 || true)"
+    fi
+    if [[ -n "$so" ]]; then
+      ln -sfn "$(basename "$so")" "$PREFIX/lib/libbz2.so.1.0"
+      ln -sfn "libbz2.so.1.0" "$PREFIX/lib/libbz2.so"
+    fi
+  fi
+  export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
+  export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
+  export BZIP2_CFLAGS="-I$PREFIX/include"
+  export BZIP2_LIBS="-L$PREFIX/lib -L$PREFIX/lib64 -lbz2"
+  bzip2_usable || die "libbz2 still not usable after local build"
+  log "libbz2 installed to $PREFIX"
+}
+
+ensure_bzip2
+
 # Helpful optional deps (warn only — do not fail the build)
 warn_missing_headers() {
   local name="$1" header="$2"
@@ -614,7 +698,6 @@ EOF
 }
 warn_missing_headers "zlib" "zlib.h"
 warn_missing_headers "readline" "readline/readline.h"
-warn_missing_headers "bzip2" "bzlib.h"
 
 # --- Python source ---
 TARBALL="Python-${PY_VER}.tar.xz"
@@ -643,12 +726,44 @@ else
 fi
 
 log "configure --prefix=$PREFIX --with-openssl=$OPENSSL_DIR ..."
+# shellcheck disable=SC2086
 ./configure "${CONFIG_ARGS[@]}" \
   CPPFLAGS="$CPPFLAGS" \
-  LDFLAGS="$LDFLAGS"
+  LDFLAGS="$LDFLAGS" \
+  ${BZIP2_CFLAGS:+BZIP2_CFLAGS="$BZIP2_CFLAGS"} \
+  ${BZIP2_LIBS:+BZIP2_LIBS="$BZIP2_LIBS"}
 
 log "Building (make -j$NPROC) ..."
 make -j"$NPROC"
+
+# Python 3.12+ can list a shared module for install even when the .so was never
+# built (e.g. optional dep missing mid-build). sharedinstall then aborts with
+# "cannot stat 'Modules/_bz2….so'". Drop missing entries from SHAREDMODS.
+filter_missing_sharedmods() {
+  local mf=Makefile
+  [[ -f "$mf" ]] || return 0
+  local line mods m new=()
+  line="$(grep '^SHAREDMODS=' "$mf" | head -1 || true)"
+  [[ -n "$line" ]] || return 0
+  mods="${line#SHAREDMODS=}"
+  for m in $mods; do
+    if [[ -f "$m" ]]; then
+      new+=("$m")
+    else
+      log "WARNING: omitting missing shared module from install: $m"
+    fi
+  done
+  # Rewrite SHAREDMODS= (first occurrence only)
+  local tmp="$BUILD_ROOT/Makefile.sharedmods"
+  awk -v repl="SHAREDMODS=${new[*]}" '
+    BEGIN { done=0 }
+    /^SHAREDMODS=/ && !done { print repl; done=1; next }
+    { print }
+  ' "$mf" >"$tmp"
+  mv "$tmp" "$mf"
+}
+
+filter_missing_sharedmods
 
 log "Installing (make altinstall) ..."
 make altinstall
