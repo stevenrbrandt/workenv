@@ -240,15 +240,16 @@ python_smoke() {
   local got
   got="$("$py" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null)" || return 1
   [[ "$got" == "$PY_VER" ]] || return 1
-  # stdlib C extensions — cannot be fixed with pip after the fact
-  "$py" -c 'import _ctypes, ssl, lzma, sqlite3; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
+  # stdlib C extensions — cannot be fixed with pip after the fact.
+  # _posixsubprocess is required by subprocess (install.py imports it early).
+  "$py" -c 'import _posixsubprocess, subprocess, _ctypes, ssl, lzma, sqlite3; assert ssl.OPENSSL_VERSION' 2>/dev/null || return 1
   return 0
 }
 
 TARGET_PY="$PREFIX/bin/python${PY_MM}"
 
 if [[ "$FORCE" -eq 0 ]] && python_smoke "$TARGET_PY"; then
-  log "Python $PY_VER already OK at $TARGET_PY (_ctypes + ssl + lzma + sqlite3)"
+  log "Python $PY_VER already OK at $TARGET_PY (_posixsubprocess + _ctypes + ssl + lzma + sqlite3)"
   log "  ssl: $("$TARGET_PY" -c 'import ssl; print(ssl.OPENSSL_VERSION)')"
   # Keep convenience symlinks inside the platform prefix
   ln -sfn "python${PY_MM}" "$PREFIX/bin/python"

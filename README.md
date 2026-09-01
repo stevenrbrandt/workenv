@@ -14,7 +14,11 @@ PYTHON_OPTIMIZE=0 ./install.sh
 # Options:
 ./install.sh --force-python   # rebuild Python even if smoke tests pass
 ./install.sh --skip-vim
-./install.sh --skip-python    # only run install.py (needs an existing python3)
+./install.sh --skip-python    # only run install.py (needs a usable python3)
+
+# If you previously skipped Python and PREFIX has a half-built interpreter
+# (missing _ctypes / _posixsubprocess), install.sh falls back to system
+# python3 for install.py and tells you to rebuild with --force-python.
 
 # Python SSL (pip HTTPS): mk-python uses system OpenSSL when present and only
 # builds it into the platform prefix when missing (or OPENSSL_BUNDLE=1).

@@ -98,16 +98,33 @@ else
   log "Skipping Python"
 fi
 
-# Prefer platform python for the rest of the install
-if [[ -x "$PREFIX/bin/python3.13" ]]; then
+# Usable interpreter? A half-built PREFIX python can be executable but miss
+# lib-dynload modules (_posixsubprocess, _ctypes, …) and then crash install.py.
+python_usable() {
+  local py="$1"
+  [[ -x "$py" ]] || return 1
+  "$py" -c 'import _posixsubprocess, subprocess, _ctypes' 2>/dev/null
+}
+
+# Prefer a *working* platform python; never run install.py on a broken prefix build.
+PY=""
+if python_usable "$PREFIX/bin/python3.13"; then
   PY="$PREFIX/bin/python3.13"
-elif [[ -x "$PREFIX/bin/python3" ]]; then
+elif python_usable "$PREFIX/bin/python3"; then
   PY="$PREFIX/bin/python3"
-elif command -v python3 >/dev/null 2>&1; then
-  PY="$(command -v python3)"
-  log "WARNING: using system $PY (platform Python not found at $PREFIX)"
-else
-  die "no python3 available; re-run without --skip-python"
+elif [[ -x "$PREFIX/bin/python3.13" || -x "$PREFIX/bin/python3" ]]; then
+  log "WARNING: platform Python at $PREFIX is incomplete (missing C extensions)"
+  log "  e.g. ModuleNotFoundError: _posixsubprocess / cannot import _ctypes"
+  log "  Rebuild with:  envup --force-python   or   ./install.sh --force-python"
+fi
+
+if [[ -z "$PY" ]]; then
+  if command -v python3 >/dev/null 2>&1 && python_usable "$(command -v python3)"; then
+    PY="$(command -v python3)"
+    log "WARNING: using system $PY for install.py (platform Python missing or broken)"
+  else
+    die "no usable python3; re-run with --force-python (or without --skip-python)"
+  fi
 fi
 
 # Platform bin before portable scripts (avoid shadowing by legacy bin/python)
@@ -118,12 +135,7 @@ export PATH="$PREFIX/bin:$ROOT/bin:$PATH"
 export PYTHONUSERBASE="${PYTHONUSERBASE:-$HOME/.local/$WORKENV_PLATFORM}"
 export PATH="$PATH:$PYTHONUSERBASE/bin"
 
-# Quick health report
-if "$PY" -c 'import _ctypes' 2>/dev/null; then
-  log "Python OK: $("$PY" -c 'import sys; print(sys.version.split()[0])') ($PY) + _ctypes"
-else
-  log "WARNING: $PY cannot import _ctypes"
-fi
+log "Python OK: $("$PY" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null || echo '?') ($PY)"
 
 # --- Vim / clangd ---
 if [[ "$SKIP_VIM" -eq 0 ]]; then
