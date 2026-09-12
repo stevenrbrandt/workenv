@@ -1,22 +1,79 @@
 #!/bin/bash
-export LOC1="/mnt/c/Program Files (x86)/eSpeak/command_line/espeak.exe"
-cat > /tmp/x.txt
-#cat /tmp/x.txt
-showtxt /tmp/x.txt
-perl -p -i -e 's/<[^>]*>//g' /tmp/x.txt
-perl -p -i -e 's/\.+/;/g' /tmp/x.txt
-perl -p -i -e 's/[\s"]+/ /g' /tmp/x.txt
-#text2wave -o /tmp/x.wav < /tmp/x.txt >/dev/null 2>&1
-#play /tmp/x.wav >/dev/null 2>&1
-#spd-say -r 20 -w -e < /tmp/x.txt > /dev/null 2>&1
-#espeak -s 200 < /tmp/x.txt > /dev/null 2>&1
-#festival --tts < /tmp/x.txt > /dev/null 2>&1
-# esp is "espeak"
-#esp "$(cat /tmp/x.txt)"
-if [ -r "$LOC1" ]; then espeak="$LOC1"
-else espeak=$(which espeak)
+# Speak one chunk of story text (used by rdstory).
+# Prefer a stable Linux espeak/espeak-ng pipeline: write WAV, then play it.
+# Avoids (1) turning every "." into ";" (long pauses / choppy bursts) and
+# (2) stuffing the whole paragraph into argv (fragile) while reopening the
+# audio device in a way that gets flaky after many paragraphs.
+
+set -euo pipefail
+
+TMPDIR="${TMPDIR:-/tmp}"
+TXT="$TMPDIR/rdme-$$.txt"
+WAV="$TMPDIR/rdme-$$.wav"
+cleanup() { rm -f "$TXT" "$WAV"; }
+trap cleanup EXIT
+
+cat >"$TXT"
+
+# Highlight repeats in the terminal (best-effort; ignore failures)
+if command -v showtxt >/dev/null 2>&1; then
+  showtxt "$TXT" || true
 fi
-"$espeak" -s 250 "$(cat /tmp/x.txt)"
-sleep 1
-#cp /tmp/x.txt ~/tmp/
-#~/Downloads/balcon.exe -f c:/Users/steve/tmp/x.txt --sub-fit -n "Microsoft Zira Desktop"
+
+# Strip markup / normalize punctuation for TTS (keep sentence periods!)
+perl -i -ne '
+  s/<[^>]*>//g;
+  s/—/--/g;
+  s/–/-/g;
+  s/’|\x{2019}/'\''/g;
+  s/“|”/"/g;
+  s/…/.../g;
+  s/\s+/ /g;
+  s/^\s+|\s+$//g;
+  print $_, "\n" if length;
+' "$TXT"
+
+[[ -s "$TXT" ]] || exit 0
+
+WIN_ESPEAK="/mnt/c/Program Files (x86)/eSpeak/command_line/espeak.exe"
+ESPEAK_BIN=""
+# Prefer native Linux engines; Windows espeak via WSL gets glitchy after sustained use.
+if [[ -n "${RDME_ESPEAK:-}" && -x "${RDME_ESPEAK}" ]]; then
+  ESPEAK_BIN="$RDME_ESPEAK"
+elif command -v espeak-ng >/dev/null 2>&1; then
+  ESPEAK_BIN="$(command -v espeak-ng)"
+elif command -v espeak >/dev/null 2>&1; then
+  ESPEAK_BIN="$(command -v espeak)"
+elif [[ -x "$WIN_ESPEAK" ]]; then
+  ESPEAK_BIN="$WIN_ESPEAK"
+else
+  echo "rdme: no espeak/espeak-ng found" >&2
+  exit 1
+fi
+
+SPEED="${RDME_SPEED:-250}"
+
+play_wav() {
+  local wav="$1"
+  if command -v paplay >/dev/null 2>&1; then
+    paplay "$wav"
+  elif command -v pw-play >/dev/null 2>&1; then
+    pw-play "$wav"
+  elif command -v aplay >/dev/null 2>&1; then
+    aplay -q "$wav"
+  else
+    return 1
+  fi
+}
+
+# WAV + play is more stable across Pulse/PipeWire/WSL than espeak opening
+# the device directly on every paragraph.
+if [[ "$ESPEAK_BIN" != *".exe" ]] && "$ESPEAK_BIN" -s "$SPEED" -f "$TXT" -w "$WAV" 2>/dev/null; then
+  if play_wav "$WAV"; then
+    exit 0
+  fi
+fi
+
+# Fallback: direct playback from file (still better than argv)
+"$ESPEAK_BIN" -s "$SPEED" -f "$TXT"
+

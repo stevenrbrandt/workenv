@@ -213,12 +213,48 @@ schedule [GROUP] <name> [AT <bin>|IN <group>] [AS <alias>] [WHILE <var>] [IF <va
   `EVERYWHERE|ALL|INTERIOR|IN|INTERIORWITHBOUNDARY|BOUNDARY|scalar`; default region is
   `EVERYWHERE` for READS, `INTERIOR` for WRITES. (See §7 — the main chapter is
   incomplete here.)
+  What these clauses actually *do* at runtime depends entirely on
+  `Cactus::presync_mode` — from "nothing at all" (`off`, the flesh default) up to
+  gating the grid functions' data pointers (`presync-only`). See §5's
+  `presync_mode` table.
 - `OPTIONS`: `meta[-early/-late]`, `global[-early/-late]`, `level`, `singlemap`,
   `local` (default), plus at most one `loop_meta|loop_global|loop_level|
   loop_singlemap|loop_local`.
 - Conditionals: `if (CCTK_Equals(param,"value")) { ... }` — **`else`/`else if` chains
   are legal** (`schedule.peg:65-69`) though the main chapter only shows a bare `if`.
-  Real 4-way chain: `repos/cactusbase/Time/schedule.ccl:13-62`.
+  Real 4-way chain: `repos/cactusbase/Time/schedule.ccl:13-62`. This top-level form
+  wraps a whole `SCHEDULE {...}`/`STORAGE:` statement (or a `{...}` block of them) —
+  it cannot appear *inside* a `SCHEDULE {...}` body around individual
+  READS:/WRITES:/etc. clauses in upstream Cactus.
+- ⚠️ **Local, uncommitted patch in this checkout only** (`repos/flesh` working tree,
+  not pushed anywhere — see `/home/sbrandt/Cactus/notes.md` "Requirement 16/17" for
+  the full writeup): `schedule.peg`/`ScheduleParser.pl`/`rdwr.pl` were extended so
+  `if (boolexpr) { READS:/WRITES:/INVALIDATES: ... } else { ... }` can appear
+  **inside** a `SCHEDULE {...}` body — including `else if` chains, and several
+  independent conditionals in one block (they compose as the cartesian product of
+  their branches, capped at 64 registrations). Still not allowed: an `if` nested
+  *inside* a branch body. Example:
+  ```
+  SCHEDULE Foo IN SomeGroup
+  {
+    LANG: C
+    READS: GRID::coordinates(everywhere)
+    if (CCTK_EQUALS(initial_data, "ID_Mag_NS")) {
+      WRITES: ADMBASE::metric(everywhere)
+    } else {
+      READS: ADMBASE::curv(everywhere)
+    }
+    WRITES: HYDROBASE::Bvec(everywhere)
+  } "..."
+  ```
+  It's parse-time sugar: `ScheduleParser.pl` expands it into one full block
+  registration per branch combination (shared clauses merged into each) wrapped in
+  literal C `if`/`else if`/`else` around the `CCTK_ScheduleFunction` calls —
+  exactly the pre-existing top-level-if-around-duplicated-SCHEDULE-blocks pattern,
+  just written once. A conditional contributes one branch per `if`/`else if` arm
+  plus one for the `else` (present as a registration even when unwritten), and
+  independent conditionals multiply. A fresh/unpatched Cactus checkout does **not**
+  support this syntax.
 - Top-level (outside any block) `STORAGE: group[,...]` toggles storage for the whole
   run, independent of file position.
 - Standard schedule bins, in execution order (verified against
@@ -702,6 +738,25 @@ etc.) are **empty stubs**; this is reconstructed from the script itself:
 - `CreateScheduleBindings.pl`'s `ScheduleSelectRDWR`/`SelectGroups`/`SelectRoutines`/
   `SelectVars` (lines 808-1171) implement the `READS`/`WRITES` (PreSync) auto-sync/
   auto-boundary machinery — completely undocumented in the (also-empty) `Schedule.tex`.
+- **`READS`/`WRITES` have a *second*, independent consumer**: `lib/sbin/rdwr.pl`
+  (`do_schedules`/`create_macros`) walks the *same* schedule.ccl parse tree
+  separately from `CreateScheduleBindings.pl` to generate
+  `bindings/include/<Thorn>/cctk_Arguments_Checked.h`, i.e. what
+  `DECLARE_CCTK_ARGUMENTS_CHECKED(func)` (§2.6) actually expands to. Two things
+  about it are easy to get wrong when touching schedule.ccl's grammar/parsing (found
+  the hard way this session, see the `notes.md` writeup cited above):
+  - It's keyed purely by **function name**, accumulated across *every* place that
+    name is scheduled anywhere in the thorn's schedule.ccl (`$reads_writes->{$nm}`)
+    — the same routine scheduled twice with different clauses (different bins, or
+    the local if/else-in-body patch above) gets the *union* of both clause sets in
+    one static macro, not two different macros. A rule that walks schedule.ccl for
+    any *other* purpose (e.g. `ScheduleParser.pl`) and only looks at a `schedule`
+    node's *direct* children will silently miss clauses nested inside a wrapper
+    node — `do_schedules`'s own top-level-vs-nested loop is the concrete
+    precedent/pitfall.
+  - The macro only controls which pointer *names* are declared at compile
+    time. Whether a named pointer is actually non-NULL at runtime is decided
+    separately, per scheduled call — see the RDWR access-control note below.
 - `CreateFunctionBindings.pl` (2600+ lines, the largest binding generator) implements
   the aliased-function/Fortran-bridging machinery — `CreateFunctionBindings`,
   `RegisterAllFunctions`/`AliasedFunctions`, `UsesPrototypes`/`ProvidedFunctions`.
@@ -709,6 +764,131 @@ etc.) are **empty stubs**; this is reconstructed from the script itself:
   `lib/sbin/ScheduleParser.pl`'s `@schedule_bins` array — **that**, not the empty
   `Schedule.tex`, is the ground truth when debugging bin-ordering issues (cross-checked
   against §2.3's list — consistent).
+- **READS/WRITES *are* an access-control mechanism at runtime — but only under
+  `presync_mode = "presync-only"`.** The chain, worth knowing because it is
+  documented nowhere and is easy to mis-diagnose:
+  `CCTKi_VarDataPtrI` (`src/main/GroupsOnGH.c:415`), which every generated
+  `DECLARE_CCTK_ARGUMENTS[X]_<func>` macro calls per variable, returns **NULL**
+  when `!CCTK_HasAccess(GH, vindex)`; `CCTK_HasAccess`
+  (`src/main/RDWR.cc:320`) looks the variable up in
+  `CCTK_ScheduleQueryCurrentFunction(cctkGH)->RDWR` — the RDWR list of the
+  *registration currently executing*, not of the function name in general.
+  So a grid function the running routine did not declare comes back as a null
+  data pointer, and one it declared (READS or WRITES) is non-null. Two
+  gotchas:
+  - `CCTK_HasAccess` **short-circuits to `true`** in a non-`CCTK_DEBUG` build
+    unless `Cactus::presync_mode` is exactly `"presync-only"`:
+    ```c
+    static bool presync_only = CCTK_Equals(presync_mode, "presync-only");
+    #ifndef CCTK_DEBUG
+      if(!presync_only) return true;
+    #endif
+    ```
+    Under `off`/`warn-only`/`mixed-warn`/`mixed-error` no pointer is ever
+    nulled. (CarpetX's startup check demands `"mixed-error"` *or*
+    `"presync-only"`, and names `mixed-error` first — so it is easy to end up
+    in a mode where undeclared access silently works and to conclude the
+    driver "doesn't do this".)
+  - Vector groups are all-or-nothing: access to any member grants the whole
+    vector, since the group is reached through a single pointer
+    (`RDWR.cc`'s `group.vectorgroup` branch).
+  Also note this is *access* control, not validity: separately, CarpetX's
+  presync tracking requires a `READS:` target to have been **validly written**
+  by some earlier routine (else `Grid function "X" is invalid ...; required:`),
+  and a `WRITES: g(everywhere)` clause to be written everywhere — writing only
+  the interior (`loop_int_device`) against an `(everywhere)` clause trips
+  `contains ... nans ... expected valid` on the boundary/ghost region. Old
+  Cactus4/PUGH has no equivalent of either check.
+- ⚠️ **CarpetX ignores `STORAGE:`'s runtime toggling entirely.**
+  `GroupStorageIncrease`/`Decrease` — what a `STORAGE:` declaration's runtime
+  effect compiles down to — is an unimplemented stub in CarpetX
+  (`repos/CarpetX/CarpetX/src/schedule.cxx:2870`, `GroupStorageCrease`,
+  literally commented `// TODO: actually do something`): it computes and
+  returns a status but performs no allocation or deallocation. Every declared
+  group has full storage from the start regardless of any `STORAGE:`
+  declaration anywhere, which is why e.g. `HydroBaseX` never bothers declaring
+  `STORAGE: Bvec` while the old `HydroBase` gated it on `initial_Bvec`. Don't
+  port a PUGH-era "toggle storage to make a group unavailable" trick to
+  CarpetX — and don't read a non-null pointer there as proof that storage
+  toggling worked.
+- ⚠️ **In the `.peg` grammar files, whitespace-skip insertion is driven purely by
+  literal whitespace in the *rule's own source text* between elements — not by
+  which alternative of an `(A|B|C)` group comes first, or any other structural
+  heuristic.** Confirmed by bisecting a real parse failure down to a single missing
+  space this session (see `notes.md`): `rdwrblock = \{ ( {reads}|{writes}|
+  {invalidates} )* \}` (no spaces around the `|`s) only gets a leading skip before
+  `reads` (the one token that happens to sit right after the group's own `( `, a
+  literal space in the source) — matching `reads` then `writes` then loses the
+  intervening whitespace and misparses as a bogus syntax error at the second
+  clause, `invalidates` never even reached. The fix is exactly what every other
+  multi-alternative OR in these files already does by convention — a space after
+  each `|` — e.g. `boolterm`'s `{boolneg}\n | {boolstar}\n | ...` and `schedule`'s
+  own body `( {storage}\n | {lang}\n | ...)*` (`schedule.peg`). **When writing or
+  editing any rule shaped like `(A|B|C)*` in `{interface,param,schedule,config}.peg`,
+  always space it `( A | B | C )*`**, not `(A|B|C)*` — the compact form silently
+  drops the skip before every non-first alternative and only fails when two
+  *different* alternatives are matched back-to-back (repeating the *same*
+  alternative, or ending on the group's own first alternative, can mask the bug).
+
+### `presync_mode` — what each of the five values actually does
+
+Declared in the flesh at `src/param.ccl:131` (`STEERABLE = RECOVER`,
+**default `off`**): `off | warn-only | mixed-warn | mixed-error | presync-only`.
+Behavior splits across two layers — the flesh's RDWR bookkeeping, and the
+driver's sync/validity machinery. Reconstructed from source (nothing in the
+UsersGuide/MaintGuide describes any of it):
+
+**Flesh layer** (`src/main/RDWR.cc`):
+
+| mode | RDWR lists built? | duplicate READS/WRITES clause for one var | invalid var/group name in a clause | nulls pointers of undeclared vars? |
+|---|---|---|---|---|
+| `off` | **no** (`:230`, early return in `CCTKi_CreateRDWRData`) | — | — | no (`:324`) |
+| `warn-only` | yes | warn (`CCTK_WARN_ALERT`) | warn (`ALERT`) | no |
+| `mixed-warn` | yes | **abort** | warn (`ALERT`) | no |
+| `mixed-error` | yes | **abort** | **fatal** (`CCTK_VError`) | no |
+| `presync-only` | yes | **abort** | **fatal** | **yes** |
+
+- `off` is total: READS/WRITES become inert metadata — the RDWR lists are never
+  even constructed.
+- ⚠️ Only `warn-only` downgrades the duplicate-clause check: `RDWR.cc:48` is
+  `CCTK_Equals(presync_mode,"warn-only") ? CCTK_WARN_ALERT : CCTK_WARN_ABORT`,
+  so **`mixed-warn` aborts** there despite its name. The invalid-name check
+  (`:191-201`) is the one that treats `warn-only` *and* `mixed-warn` as warnings.
+- The pointer-nulling column is the access-control chain described above
+  (`RDWR.cc:327-331` → `GroupsOnGH.c:423`): `presync-only` only, plus any
+  `CCTK_DEBUG` build.
+
+**Driver layer, old Carpet** (`repos/Carpet/Carpet/src/PreSync.cc:413-419`,
+`CallFunction.cc:69-75`) — the only driver implementing all five:
+
+| mode | tracks validity | automatic syncs from READS | honors explicit `SYNC:` | reading invalid data |
+|---|---|---|---|---|
+| `off` | no | no | yes | — |
+| `warn-only` | yes | **no** (`may_sync=false`) | yes | warn |
+| `mixed-warn` | yes | yes | yes | warn |
+| `mixed-error` | yes | yes | yes | **error** |
+| `presync-only` | yes | yes | **ignored** | **error** |
+
+"Mixed" means exactly that: explicit `SYNC:` statements and READS/WRITES-driven
+auto-sync coexist. `presync-only` drops explicit `SYNC:` entirely —
+`CallFunction.cc:75` never populates `sync_groups` in that mode — and derives all
+communication from the READS/WRITES clauses. `warn-only` is diagnosis-only: it
+tracks and complains but performs no automatic syncs.
+
+**Driver layer, CarpetX** (`repos/CarpetX/CarpetX/src/schedule.cxx`): accepts
+**only `mixed-error` and `presync-only`** — anything else is a startup
+`CCTK_ERROR` (`:1047-1051`). Under `presync-only` it additionally auto-syncs
+groups whose ghosts a READS clause needs before calling the routine
+(`:1985-2004`), skips syncing groups already valid (`:2380`), and pre-syncs
+timelevel 0 during timelevel cycling (`:1555`).
+
+**Practical upshot**: `mixed-error` enforces *validity* (you get
+`Grid function "X" is invalid ...; required:` for reading never-written data, and
+`contains ... nans ... expected valid` when a `WRITES: g(everywhere)` clause is
+only written on the interior) but never nulls a pointer. Only `presync-only`
+also enforces *access*, i.e. makes an undeclared variable's data pointer NULL.
+Since CarpetX's error message names `mixed-error` first, it is easy to land in a
+mode where undeclared access silently works.
 
 ### Coding style vs. reality
 Style guide (`Style.tex`) largely matches real code (grdoc file/function headers,
@@ -732,6 +912,45 @@ Style guide (`Style.tex`) largely matches real code (grdoc file/function headers
 | Stale generated bindings after CCL edit | touch any CCL file or `lib/make/force-rebuild`, rerun `gmake <config>` |
 | Build hangs / weird "checking status of libX.a" | `VERBOSE=yes`; check clock skew (FAQ:429-439) |
 | Undefined-reference/link-order error | almost always a missing `inherits:` in `interface.ccl` (FAQ:644-673) |
+| Iterating on a `schedule.ccl`/`.peg` grammar change without a full build | see "Fast CST-only testing" below |
+
+### Fast CST-only testing (no full configure/build needed)
+Useful when iterating on `schedule.ccl` syntax, a `.peg` grammar edit, or
+`ScheduleParser.pl`/`rdwr.pl` logic — three levels of speed, cheapest first:
+1. **Grammar only**: `piraha::parse_peg_file($peg_path)` then
+   `piraha::parse_src($grammar,$rule,$ccl_file)` (see `lib/sbin/Piraha.pm`) against a
+   scratch `.ccl` snippet — `$m->matches()` / `$m->showError()` / `$m->{gr}->dump()`
+   tell you immediately whether the grammar accepts a construct and what the parse
+   tree looks like, no thorn/interface DB needed at all.
+2. **Parser logic, no compile**: call `create_schedule_database(%thorns)`
+   (`ScheduleParser.pl`, the same entry point `SchedLatex.pl` uses) directly from a
+   throwaway script. Two constraints: (a) the script must physically live in (or be
+   run from) `repos/flesh/lib/sbin/` — the sub locates the `.peg` file via
+   `$FindBin::Bin/../../src/piraha/pegs/schedule.peg`, resolved from the *invoking
+   script's* location; (b) `%thorns` maps THORN → a directory path with **at least
+   two path components** before `schedule.ccl` (`parse_ccl`'s
+   `m{([^/]+)/([^/]+)/(\w+)\.ccl$}` regex) — any `.../SomeArr/SomeThorn/` scratch dir
+   satisfies this without needing a real arrangement. Inspect the returned
+   `%schedule_db`'s `BLOCK_n READS/WRITES/...` entries and the `FILE` buffer text (the
+   literal C `if`/`@BLOCK@N` scaffold) directly.
+3. **Real build+run, fast**: a minimal classic-Cactus4/PUGH executable (no
+   MPI/HDF5/AMReX needed) compiles and links in well under a minute. Recipe: a scratch
+   CST ThornList with just `CactusPUGH/PUGH CactusBase/{CoordBase,CartGrid3D,SymBase,
+   Boundary,IOUtil,IOBasic} CactusBase/InitBase` plus whatever `EinsteinBase/*` thorns
+   your test needs (`ADMBase` needs `CartGrid3D`; `HydroBase` needs `InitBase`) plus
+   your own test thorn; reuse an already-configured plain optionlist
+   (`configs/osdiv/OptionList` in this checkout — gcc/g++/gfortran, no CUDA actually
+   exercised) rather than writing a new one. `gmake <newconfig>-config
+   THORNLIST=<path> options=<path> PROMPT=no` configures+builds in one step (`PROMPT=no`
+   is required for non-interactive use — otherwise it stops asking "Setup
+   configuration X (yes)?"). `gmake <newconfig>-delete PROMPT=no` removes the whole
+   scratch `configs/<newconfig>/` afterward. A gotcha hit this way: several common
+   `EinsteinBase` groups have **no STORAGE by default** — `ADMBase::shift`/`dtlapse`/
+   `dtshift` (gated by `initial_shift`/`initial_dtlapse`/`initial_dtshift` != `"none"`,
+   `ADMBase/schedule.ccl:8-22`) and `HydroBase::Bvec`/etc. (gated by
+   `initial_Bvec` != `"none"`, `HydroBase/schedule.ccl:16-18`) — touch one without
+   setting the relevant param in the parfile and its pointer is silently NULL
+   regardless of READS/WRITES, unrelated to whatever you're actually testing.
 
 ---
 
@@ -799,6 +1018,17 @@ Style guide (`Style.tex`) largely matches real code (grdoc file/function headers
   embed full source (FAQ:1537-1543).
 - `MPI_Init` is called once in the flesh, before parsing argv, because MPI is allowed
   to mangle argv (FAQ:1512-1534).
+- A **vector-type grid variable** (`interface.ccl` declaration like
+  `CCTK_REAL Bvec[3] TYPE=GF ... { Bvec[0], Bvec[1], Bvec[2] }`, e.g.
+  `HydroBase::Bvec`) exposes only **one** pointer under `DECLARE_CCTK_ARGUMENTS`/
+  `DECLARE_CCTK_ARGUMENTS_CHECKED` when referenced by group name in
+  `schedule.ccl` (`WRITES: HYDROBASE::Bvec(everywhere)`) — a plain
+  `CCTK_REAL *const Bvec`, its 0th/representative component, **not** an array of 3
+  pointers (`Bvec[3]`). Confirmed by reading the actual generated
+  `cctk_Arguments_Checked.h` — don't assume you can index `Bvec[1]`/`Bvec[2]` this
+  way; that indexing syntax exists in `interface.ccl` and `qrname`'s grammar
+  (`Bvec[0]` etc.) for a different purpose (naming one component in READS/WRITES),
+  not for getting a pointer array in C.
 
 ### Reference tables (`Appendices.tex`)
 - **Thorn naming**: unique (case-insensitive), start with a letter, letters/digits/
@@ -812,7 +1042,8 @@ Style guide (`Style.tex`) largely matches real code (grdoc file/function headers
   `cctk_strong_param_check`, `cctk_timer_output`, `recovery_mode`,
   `highlight_warning_messages`, `info_format`; restricted: `cctk_final_time`,
   `cctk_initial_time`, `cctk_itlast`, `max_runtime`, `presync_mode`
-  (`off|warn-only|mixed-warn|mixed-error|presync-only`), `terminate`
+  (`off|warn-only|mixed-warn|mixed-error|presync-only` — per-value behavior
+  tabulated in §5), `terminate`
   (`never|iteration|time|runtime|any|all`), `terminate_next`.
 - **ThornList line syntax**: `<arrangement>/<thorn>`; CRL directives
   `!CRL_VERSION`/`!DEFINE`/`!TARGET`/`!TYPE`/`!URL`/`!REPO_BRANCH`/`!REPO_PATH`/
