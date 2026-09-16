@@ -2,11 +2,11 @@
 # Source this file; sets/exports WORKENV_PLATFORM (e.g. x86_64-glibc-2.35).
 #
 # Override: export WORKENV_PLATFORM=... before sourcing.
-
-# Avoid re-running detection if already set (e.g. parent install.sh).
-if [ -n "${WORKENV_PLATFORM:-}" ]; then
-  return 0 2>/dev/null || exit 0
-fi
+#
+# Also defines workenv_compatible_bin_path: exact $WORKENV_PREFIX/bin, then
+# older same-arch glibc prefixes (those binaries run on newer glibc). That
+# keeps host vim/node/python working inside an apptainer image whose own
+# prefix has not been built yet.
 
 workenv_detect_platform() {
   local arch libc
@@ -23,5 +23,40 @@ workenv_detect_platform() {
   printf '%s\n' "${arch}-${libc}"
 }
 
-WORKENV_PLATFORM="$(workenv_detect_platform)"
+if [ -z "${WORKENV_PLATFORM:-}" ]; then
+  WORKENV_PLATFORM="$(workenv_detect_platform)"
+fi
 export WORKENV_PLATFORM
+
+# Colon-separated bin dirs for PATH. Exact platform first.
+workenv_compatible_bin_path() {
+  local root="${WORKENV_ROOT:-}"
+  local prefix="${WORKENV_PREFIX:-}"
+  local path arch libc my_ver dir ver
+  if [ -z "$prefix" ] && [ -n "$root" ]; then
+    prefix="$root/$WORKENV_PLATFORM"
+  fi
+  path="${prefix:+$prefix/bin}"
+  [ -n "$root" ] || { printf '%s\n' "$path"; return 0; }
+  arch="${WORKENV_PLATFORM%%-*}"
+  libc="${WORKENV_PLATFORM#*-}"
+  case "$libc" in
+    glibc-*)
+      my_ver="${libc#glibc-}"
+      for dir in "$root/${arch}-glibc-"*; do
+        [ -d "$dir/bin" ] || continue
+        [ -n "$prefix" ] && [ "$dir" = "$prefix" ] && continue
+        ver="${dir##*-glibc-}"
+        # Keep prefixes with glibc <= current (sort -V: last line is newest).
+        if [ "$(printf '%s\n%s\n' "$ver" "$my_ver" | sort -V | tail -n1)" = "$my_ver" ]; then
+          if [ -n "$path" ]; then
+            path="$path:$dir/bin"
+          else
+            path="$dir/bin"
+          fi
+        fi
+      done
+      ;;
+  esac
+  printf '%s\n' "$path"
+}

@@ -26,6 +26,7 @@ export WORKENV_ROOT="$ROOT"
 # shellcheck source=bin/workenv-platform.sh
 . "$ROOT/bin/workenv-platform.sh"
 export PREFIX="${PREFIX:-$ROOT/$WORKENV_PLATFORM}"
+export WORKENV_PREFIX="$PREFIX"
 
 FORCE_PYTHON=0
 SKIP_PYTHON=0
@@ -127,8 +128,14 @@ if [[ -z "$PY" ]]; then
   fi
 fi
 
-# Platform bin before portable scripts (avoid shadowing by legacy bin/python)
-export PATH="$PREFIX/bin:$ROOT/bin:$PATH"
+# Platform bin before portable scripts (avoid shadowing by legacy bin/python).
+# Include older same-arch glibc prefixes so a host toolchain is visible
+# while installing inside a newer-libc container.
+if command -v workenv_compatible_bin_path >/dev/null 2>&1; then
+  export PATH="$(workenv_compatible_bin_path):$ROOT/bin:$PATH"
+else
+  export PATH="$PREFIX/bin:$ROOT/bin:$PATH"
+fi
 # Do not put PREFIX on LD_LIBRARY_PATH. Platform python/openssl are built with
 # RUNPATH; prepending a bundled libssl breaks distro curl (symbol version mismatch).
 # Keep pip --user installs off the shared ~/.local tree

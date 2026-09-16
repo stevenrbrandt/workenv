@@ -33,9 +33,13 @@ OPENSSL_BUNDLE=1 PYTHON_OPTIMIZE=0 ./install.sh --force-python
 Layout:
 
 - `bin/`, `py/` — portable scripts and modules (this repo)
-- `$WORKENV_PLATFORM/` — e.g. `x86_64-glibc-2.35/` — Python, vim, clangd, libs  
+- `$WORKENV_PLATFORM/` — e.g. `x86_64-glibc-2.35/` — Python, vim, clangd, grok, claude, libs  
   (`$(uname -m)-$(getconf GNU_LIBC_VERSION | sed 's/ /-/g')`; see `bin/workenv-platform.sh`)
 - `~/.local/$WORKENV_PLATFORM/` — `pip install --user` / `PYTHONUSERBASE` (keeps native wheels per libc)
+
+`grok-install.sh` / `claude-install.sh` install into `$WORKENV_PREFIX/bin`, not `~/.local`. Official grok/claude installers otherwise drop binaries in `~/.grok/bin` or `~/.local/bin`, and workenv does not put `~/.local/bin` on PATH.
+
+Inside an apptainer/singularity image, libc (so `$WORKENV_PLATFORM`) often differs from the host. `~/.bashaux` still prepends older same-arch glibc prefixes, so a host-built vim/node/python keeps working until you build a prefix for that image.
 
 Shell config is written to `~/.bashaux` (sourced from `~/.bashrc`). Refresh with `envup` or re-run `./install.sh`.
 
@@ -50,3 +54,5 @@ WORKENV_YES=1 envup      # same as -y
 ```
 
 `install.py` (and `mk-vim.sh`) install vim-plug, portable Node.js + `clangd` into `$WORKENV_PREFIX`, and clone `coc.nvim` — no sudo and no manual `:PlugInstall`. `~/.vim/coc-settings.json` is pointed at the prefix `clangd` binary.
+
+LLM onboarding for how this environment is supposed to work (PATH, prefixes, containers, grok/claude, vim): `brain/`.
