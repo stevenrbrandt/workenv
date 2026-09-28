@@ -20,9 +20,9 @@ PYTHON_OPTIMIZE=0 ./install.sh
 # (missing _ctypes / _posixsubprocess), install.sh falls back to system
 # python3 for install.py and tells you to rebuild with --force-python.
 
-# Python SSL (pip HTTPS): mk-python uses system OpenSSL when present and only
-# builds it into the platform prefix when missing (or OPENSSL_BUNDLE=1).
-# For apptainer/cluster images with no libssl, force a self-contained build:
+# Python SSL (pip HTTPS): mk-python needs a consistent OpenSSL >= 3.0 (headers
+# and libs from the same tree). On older clusters (OpenSSL 1.1.1) it auto-builds
+# OpenSSL into the prefix. Force that anytime with:
 OPENSSL_BUNDLE=1 PYTHON_OPTIMIZE=0 ./install.sh --force-python
 
 # mk-python also bundles libffi / xz / sqlite / bzip2 into the prefix when the

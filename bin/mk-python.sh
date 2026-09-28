@@ -10,7 +10,8 @@
 #   PY_VER=3.13.14 mk-python.sh
 #   PYTHON_OPTIMIZE=0 mk-python.sh   # skip PGO (much faster)
 #   OPENSSL_BUNDLE=1 mk-python.sh    # force OpenSSL into prefix (portable/apptainer)
-#   Default: use system OpenSSL if present; only build into prefix when missing.
+#   Default: use a consistent OpenSSL >= 3.0 (system or prefix); otherwise
+#   build OpenSSL into the prefix. Avoids header/lib mismatches on clusters.
 #
 # Installs to: $WORKENV_ROOT/$WORKENV_PLATFORM
 #   e.g. ~/workenv/x86_64-glibc-2.35  (arch + libc; see workenv-platform.sh)
@@ -457,75 +458,139 @@ ensure_libffi() {
 
 ensure_libffi
 
-# --- OpenSSL (required for ssl module / pip HTTPS, e.g. inside apptainer) ---
-# Only build into PREFIX when the system has no usable OpenSSL (or OPENSSL_BUNDLE=1).
-# Preferring a prior PREFIX bundle unconditionally is wrong: an older libssl on
-# LD_LIBRARY_PATH breaks distro curl (needs newer OPENSSL_* symbols).
+# --- OpenSSL (required for ssl / pip HTTPS) ---
+# Python 3.13's _ssl/_hashlib use OpenSSL 3 APIs when built against OpenSSL 3
+# headers (e.g. SSL_get1_peer_certificate, EVP_MD_get_type). A classic cluster
+# failure: CPPFLAGS has -I$PREFIX/include (OpenSSL 3 headers from a prior
+# bundle) while we "use system" OpenSSL 1.1.1 libs → module builds, then
+# import dies with undefined symbol. Headers and libs must be one consistent tree,
+# loadable via PREFIX/distro paths only (RUNSHARED).
 
-prefix_openssl_usable() {
-  if [[ -r "$PREFIX/include/openssl/ssl.h" ]] && \
-     { [[ -e "$PREFIX/lib/libssl.so" ]] || [[ -e "$PREFIX/lib64/libssl.so" ]] || \
-       ls "$PREFIX"/lib/libssl.so* >/dev/null 2>&1 || ls "$PREFIX"/lib64/libssl.so* >/dev/null 2>&1; }; then
-    return 0
-  fi
-  return 1
+# Minimum OPENSSL_VERSION_NUMBER we accept without bundling (3.0.0).
+OPENSSL_MIN_HEX="${OPENSSL_MIN_HEX:-0x30000000}"
+
+prefix_openssl_present() {
+  [[ -r "$PREFIX/include/openssl/ssl.h" ]] || return 1
+  [[ -e "$PREFIX/lib/libssl.so" || -e "$PREFIX/lib64/libssl.so" ]] \
+    || ls "$PREFIX"/lib/libssl.so* >/dev/null 2>&1 \
+    || ls "$PREFIX"/lib64/libssl.so* >/dev/null 2>&1
 }
 
-# Distro/system OpenSSL only — ignore PREFIX pkg-config and -I/-L so a leftover
-# bundle does not masquerade as "system has OpenSSL".
-system_openssl_usable() {
-  if have pkg-config && with_system_libs pkg-config --exists openssl; then
-    return 0
+# Compile+link+run a probe against root's headers/libs with portable LD path.
+# Prints OPENSSL_VERSION_NUMBER (hex) on success.
+openssl_probe_version() {
+  local root="$1"
+  local inc libdir=""
+  inc="$root/include"
+  [[ -r "$inc/openssl/ssl.h" ]] || return 1
+  if [[ -d "$root/lib64" ]]; then libdir="$root/lib64"; fi
+  if [[ -d "$root/lib" ]]; then
+    libdir="${libdir:+$libdir:}$root/lib"
   fi
-  cat >"$BUILD_ROOT/ssl_probe_sys.c" <<'EOF'
+  [[ -n "$libdir" ]] || return 1
+  cat >"$BUILD_ROOT/ssl_ver_probe.c" <<'EOF'
+#include <stdio.h>
 #include <openssl/ssl.h>
+#include <openssl/evp.h>
 #include <openssl/opensslv.h>
 int main(void) {
-  return (OPENSSL_VERSION_NUMBER > 0) ? 0 : 1;
+  /* Touch OpenSSL 3 symbols when headers are 3.x so link/runtime must match. */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  const SSL_METHOD *m = TLS_method();
+  (void)m;
+  (void)EVP_MD_get_type;
+  (void)SSL_get1_peer_certificate;
+#endif
+  printf("%#lx\n", (unsigned long)OPENSSL_VERSION_NUMBER);
+  return 0;
 }
 EOF
-  # No PREFIX CPPFLAGS/LDFLAGS — pure system headers and libs
-  with_system_libs cc "$BUILD_ROOT/ssl_probe_sys.c" -lssl -lcrypto \
-    -o "$BUILD_ROOT/ssl_probe_sys" 2>/dev/null
+  local -a lib_L=()
+  local IFS=':'
+  local d
+  for d in $libdir; do
+    lib_L+=("-L$d")
+  done
+  # Link only against this root (no ambient -L$PREFIX from LDFLAGS)
+  if ! env LD_LIBRARY_PATH="$libdir:/usr/lib64:/usr/lib" \
+      cc -I"$inc" "${lib_L[@]}" "$BUILD_ROOT/ssl_ver_probe.c" -lssl -lcrypto \
+      -Wl,-rpath,"${libdir%%:*}" \
+      -o "$BUILD_ROOT/ssl_ver_probe" 2>/dev/null; then
+    return 1
+  fi
+  env LD_LIBRARY_PATH="$libdir:/usr/lib64:/usr/lib" "$BUILD_ROOT/ssl_ver_probe" 2>/dev/null
+}
+
+openssl_version_ge() {
+  local ver="$1" min="$2"
+  # strip 0x and compare as hex integers
+  local v=${ver#0x} m=${min#0x}
+  [[ $((16#$v)) -ge $((16#$m)) ]]
+}
+
+prefix_openssl_usable() {
+  prefix_openssl_present || return 1
+  local ver
+  ver="$(openssl_probe_version "$PREFIX" || true)"
+  [[ -n "$ver" ]] || return 1
+  openssl_version_ge "$ver" "$OPENSSL_MIN_HEX"
+}
+
+# Distro OpenSSL: must be portable, version-new enough, and not shadowed by
+# PREFIX headers already on CPPFLAGS.
+system_openssl_usable() {
+  # If PREFIX has OpenSSL headers, -I$PREFIX/include will win and mix with
+  # system libs — never treat "system" as usable in that state.
+  if [[ -r "$PREFIX/include/openssl/ssl.h" ]]; then
+    return 1
+  fi
+  local pref="/usr" ver
+  if have pkg-config && with_system_libs pkg-config --exists openssl; then
+    pref="$(with_system_libs pkg-config --variable=prefix openssl 2>/dev/null || echo /usr)"
+    is_portable_prefix "$pref" || return 1
+  fi
+  [[ -r "$pref/include/openssl/ssl.h" ]] || [[ -r /usr/include/openssl/ssl.h ]] || return 1
+  if [[ ! -r "$pref/include/openssl/ssl.h" ]]; then
+    pref="/usr"
+  fi
+  ver="$(openssl_probe_version "$pref" || true)"
+  [[ -n "$ver" ]] || return 1
+  openssl_version_ge "$ver" "$OPENSSL_MIN_HEX"
 }
 
 use_system_openssl() {
-  local cflags libs pref
+  local cflags libs pref="/usr" ver
   if have pkg-config && with_system_libs pkg-config --exists openssl; then
-    log "OpenSSL available (system): $(with_system_libs pkg-config --modversion openssl)"
+    pref="$(with_system_libs pkg-config --variable=prefix openssl 2>/dev/null || echo /usr)"
     cflags="$(with_system_libs pkg-config --cflags openssl 2>/dev/null || true)"
     libs="$(with_system_libs pkg-config --libs openssl 2>/dev/null || true)"
-    pref="$(with_system_libs pkg-config --variable=prefix openssl 2>/dev/null || true)"
-    export CPPFLAGS="$cflags $CPPFLAGS"
-    export LDFLAGS="$libs $LDFLAGS"
-    # Python --with-openssl wants a root that contains include/ and lib(or lib64)/
-    if [[ -n "$pref" && -r "$pref/include/openssl/ssl.h" ]]; then
-      OPENSSL_DIR="$pref"
-    else
-      OPENSSL_DIR="/usr"
-    fi
-  else
-    log "OpenSSL available via compiler default paths"
-    OPENSSL_DIR="/usr"
   fi
-  if prefix_openssl_usable; then
-    log "  note: PREFIX also has OpenSSL from a prior bundle; ignoring it (OPENSSL_BUNDLE=0)."
-    log "  (Leave PREFIX libssl off LD_LIBRARY_PATH so system curl keeps working.)"
+  if [[ ! -r "$pref/include/openssl/ssl.h" ]]; then
+    pref="/usr"
+    cflags=""
+    libs="-lssl -lcrypto"
   fi
+  ver="$(openssl_probe_version "$pref")"
+  log "OpenSSL available (system $pref): $ver"
+  # Put system openssl flags FIRST so they win over a later -I$PREFIX/include
+  export CPPFLAGS="${cflags:+$cflags }-I$pref/include $CPPFLAGS"
+  export LDFLAGS="${libs:+$libs }-L$pref/lib -L$pref/lib64 $LDFLAGS"
+  OPENSSL_DIR="$pref"
 }
 
 use_prefix_openssl() {
-  log "OpenSSL available in prefix $PREFIX"
+  local ver
+  ver="$(openssl_probe_version "$PREFIX" || true)"
+  log "OpenSSL available in prefix $PREFIX ($ver)"
   export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
   export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
   OPENSSL_DIR="$PREFIX"
 }
 
 build_openssl_into_prefix() {
-  log "Building OpenSSL $OPENSSL_VER into $PREFIX (no root; portable for apptainer)"
+  log "Building OpenSSL $OPENSSL_VER into $PREFIX (no root; portable for apptainer/clusters)"
   need_cmds perl
   local tarball="openssl-${OPENSSL_VER}.tar.gz"
-  # github mirror is reliable; official source is also fine
   local url="https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VER}/${tarball}"
   local url_alt="https://www.openssl.org/source/${tarball}"
   cd "$BUILD_ROOT"
@@ -535,7 +600,6 @@ build_openssl_into_prefix() {
   fi
   tar -xzf "$tarball"
   cd "openssl-${OPENSSL_VER}"
-  # shared libs; rpath so _ssl finds them when only $PREFIX is visible (apptainer)
   local cfg=(--prefix="$PREFIX" --openssldir="$PREFIX/ssl" shared)
   cat >"$BUILD_ROOT/zlib_probe.c" <<'ZEOF'
 #include <zlib.h>
@@ -548,13 +612,15 @@ ZEOF
   ./Configure "${cfg[@]}" \
     "-Wl,-rpath,$PREFIX/lib" "-Wl,-rpath,$PREFIX/lib64"
   make -j"$NPROC"
-  # libs + headers only (skip man pages)
   make install_sw
   export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
   export CPPFLAGS="-I$PREFIX/include $CPPFLAGS"
   export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib64 -Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64 $LDFLAGS"
-  prefix_openssl_usable || die "OpenSSL still not usable after local build"
-  log "OpenSSL installed to $PREFIX"
+  local ver
+  ver="$(openssl_probe_version "$PREFIX" || true)"
+  [[ -n "$ver" ]] || die "OpenSSL probe failed after local build"
+  openssl_version_ge "$ver" "$OPENSSL_MIN_HEX" || die "PREFIX OpenSSL too old after build: $ver"
+  log "OpenSSL installed to $PREFIX ($ver)"
 }
 
 ensure_openssl() {
@@ -563,34 +629,46 @@ ensure_openssl() {
   if [[ "$OPENSSL_BUNDLE" == "1" ]]; then
     log "OPENSSL_BUNDLE=1 — building OpenSSL into prefix even if system has it"
     if prefix_openssl_usable; then
-      log "  reusing existing OpenSSL in $PREFIX (delete it or use a clean PREFIX to rebuild)"
+      log "  reusing existing good OpenSSL in $PREFIX"
       use_prefix_openssl
     else
+      if prefix_openssl_present; then
+        log "  PREFIX OpenSSL present but unusable/too old; rebuilding"
+      fi
       build_openssl_into_prefix
       OPENSSL_DIR="$PREFIX"
     fi
     return 0
   fi
 
-  # Default: system first, then a prior prefix bundle, else build.
+  # Prefer a verified PREFIX OpenSSL 3.x (matches -I$PREFIX/include already set).
+  if prefix_openssl_usable; then
+    use_prefix_openssl
+    return 0
+  fi
+
+  if prefix_openssl_present; then
+    log "PREFIX has OpenSSL headers/libs but probe failed or version < 3.0 — rebuilding bundle"
+    log "  (avoids mixing PREFIX OpenSSL 3 headers with older system libssl)"
+    build_openssl_into_prefix
+    OPENSSL_DIR="$PREFIX"
+    return 0
+  fi
+
   if system_openssl_usable; then
     use_system_openssl
     return 0
   fi
 
-  if prefix_openssl_usable; then
-    log "no system OpenSSL; using existing prefix build"
-    use_prefix_openssl
-    return 0
-  fi
-
-  log "no usable system OpenSSL; building into prefix (set OPENSSL_BUNDLE=1 to force this)"
+  log "no portable OpenSSL >= 3.0; building $OPENSSL_VER into prefix"
+  log "  (set OPENSSL_BUNDLE=1 to force this; system 1.1.1 is not enough once PREFIX headers appear)"
   build_openssl_into_prefix
   OPENSSL_DIR="$PREFIX"
 }
 
 ensure_openssl
 [[ -n "$OPENSSL_DIR" ]] || die "OPENSSL_DIR unset after ensure_openssl"
+log "Using OPENSSL_DIR=$OPENSSL_DIR for Python --with-openssl"
 
 # --- liblzma / xz (required for Python _lzma — used by nrpy, etc.) ---
 lzma_usable() {
@@ -981,7 +1059,9 @@ _EXT_SUFFIX="$(ext_suffix)"
 log "EXT_SUFFIX=$_EXT_SUFFIX"
 require_built_module "_posixsubprocess" "$_EXT_SUFFIX" || die "_posixsubprocess missing — stdlib build is broken"
 require_built_module "_ctypes" "$_EXT_SUFFIX" || die "_ctypes missing — libffi not found/linked; see ensure_libffi / config.log"
-require_built_module "_ssl" "$_EXT_SUFFIX" || die "_ssl missing — OpenSSL not found/linked; see ensure_openssl / config.log"
+if ! require_built_module "_ssl" "$_EXT_SUFFIX"; then
+  die "_ssl missing — often OpenSSL header/lib mismatch (PREFIX OpenSSL 3 headers + system 1.1.1). Re-run; mk-python auto-bundles OpenSSL 3. Or: OPENSSL_BUNDLE=1 ./install.sh --force-python"
+fi
 require_built_module "_lzma" "$_EXT_SUFFIX" || die "_lzma missing — liblzma not found/linked; see ensure_liblzma / config.log"
 require_built_module "_sqlite3" "$_EXT_SUFFIX" || die "_sqlite3 missing — sqlite3 not found/linked; see ensure_sqlite / config.log"
 if ! require_built_module "_bz2" "$_EXT_SUFFIX"; then

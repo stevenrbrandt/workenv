@@ -912,6 +912,7 @@ sub accent {
   $txt =~ s/ć/\\u263\\'87/g;
   # https://www.compart.com/en/unicode/U+00BF
   $txt =~ s/¿/\\u191\\'bf/g;
+  $txt =~ s/ü/\\u252\\'fc/g;
   $txt =~ s/<q>/qnum()/ge;
   # https://www.compart.com/en/unicode/U+0119
   $txt =~ s/<qno>/$qno/ge;

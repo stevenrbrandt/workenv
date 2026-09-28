@@ -144,6 +144,7 @@ for(my $i=0;$i <= $#ARGV;$i++) {
         $cmd .= " -url ".$ARGV[++$i];
     } elsif($a eq "-f") {
         my $cwd = Cwd::getcwd();
+        print("cwd=$cwd\n");
         my $file = $ARGV[++$i];
         if($file !~ /^\//) {
             $file = $cwd."/".$file;
@@ -153,6 +154,8 @@ for(my $i=0;$i <= $#ARGV;$i++) {
         print("file=$file whome=$whome\n");
         if($file =~ "/mnt/c/Users") {
             $cmd .= " -url 'file:///C:/Users$''";
+        } elsif($file =~ m{^/home/}) {
+            $cmd .= " -url 'file://wsl.localhost/Ubuntu/home/$''";
         } else {
             print("Not using cmd=$cmd\n");
             exit(0);

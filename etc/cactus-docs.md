@@ -229,11 +229,12 @@ schedule [GROUP] <name> [AT <bin>|IN <group>] [AS <alias>] [WHILE <var>] [IF <va
 - ⚠️ **Local, uncommitted patch in this checkout only** (`repos/flesh` working tree,
   not pushed anywhere — see `/home/sbrandt/Cactus/notes.md` "Requirement 16/17" for
   the full writeup): `schedule.peg`/`ScheduleParser.pl`/`rdwr.pl` were extended so
-  `if (boolexpr) { READS:/WRITES:/INVALIDATES: ... } else { ... }` can appear
-  **inside** a `SCHEDULE {...}` body — including `else if` chains, and several
-  independent conditionals in one block (they compose as the cartesian product of
-  their branches, capped at 64 registrations). Still not allowed: an `if` nested
-  *inside* a branch body. Example:
+  `if (boolexpr) { READS:/WRITES:/INVALIDATES:/SYNC: ... } else { ... }` can
+  appear **inside** a `SCHEDULE {...}` body — including `else if` chains, and
+  several independent conditionals in one block (they compose as the cartesian
+  product of their branches, capped at 128 registrations). Still not allowed: an
+  `if` nested *inside* a branch body, or any of
+  `LANG:`/`STORAGE:`/`OPTIONS:`/`TAGS:`/`TRIGGERS:` in one. Example:
   ```
   SCHEDULE Foo IN SomeGroup
   {
