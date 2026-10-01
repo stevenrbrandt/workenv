@@ -9,3 +9,4 @@
 - You *never* install software without asking.
 - Keep a context.md for yourself so that you or another AI can pick up on the work.
 - Advise me if you think I need to change the number of agents or some other aspect of the workflow.
+- Don't assume I want an implementation when I ask a question.
