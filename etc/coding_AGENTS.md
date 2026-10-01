@@ -10,3 +10,4 @@
 - Keep a context.md for yourself so that you or another AI can pick up on the work.
 - Advise me if you think I need to change the number of agents or some other aspect of the workflow.
 - Follow good software design practices: ~/workenv/etc/software.
+- Don't assume I want an implementation when I ask a question.
