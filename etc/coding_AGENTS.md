@@ -11,3 +11,7 @@
 - Advise me if you think I need to change the number of agents or some other aspect of the workflow.
 - Follow good software design practices: ~/workenv/etc/software.
 - Don't assume I want an implementation when I ask a question.
+- Before committing, first launch a harsh critic to make sure we're on track.
+- Before beginning a task, make sure something like it isn't already implemented or partially implemented in the codebase
+- Constants should have a name and live in a standard location rather than being sprinkled throughout the code.
+- Use lscpu to measure machine size, not nprocs
