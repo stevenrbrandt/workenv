@@ -15,3 +15,4 @@
 - Before beginning a task, make sure something like it isn't already implemented or partially implemented in the codebase
 - Constants should have a name and live in a standard location rather than being sprinkled throughout the code.
 - Use lscpu to measure machine size, not nprocs
+- Before running jobs, check to see if slurm is present and use that if it is
