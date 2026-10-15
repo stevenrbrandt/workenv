@@ -1,0 +1,9 @@
+# Python bytecode caches.  These appear under bin/ and py/ whenever a script
+# there is imported as a module.
+__pycache__/
+*.py[cod]
+
+# Relocatable runtime installed under the repo root: Node.js plus a Python 3.13
+# environment (black, alembic, certipy, ...).  ~1.7 GB of installed binaries,
+# not source -- reinstall it rather than version it.
+/x86_64-glibc-2.43/
