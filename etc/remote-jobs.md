@@ -106,7 +106,8 @@ Mars grid; use it rather than `hump_wide-1.par`, which cannot decompose past a f
 ## rostam
 
 Heterogeneous: **every partition is different hardware**, so each needs its own mdb entry
-*and* its own optionlist. Only the login node and the `medusa` partition are configured.
+*and* its own optionlist. The login node, the `medusa` partition, and the `buran`
+partition are configured. The other partitions are not.
 
     medusa (default) 16 nodes  Intel Xeon Gold 6148  40 cores   94 GB   AVX-512
     buran            16 nodes  AMD EPYC 7352         48 cores  252 GB   NO AVX-512
@@ -114,9 +115,9 @@ Heterogeneous: **every partition is different hardware**, so each needs its own 
     risc5             2 nodes  64 cores
     plus cuda / V100 / A100 / DGX-A100 / mi100 / spark (aarch64)
 
-- `rostam.cfg` compiles with `-mavx512f` and friends. medusa's Xeon 6148 has AVX-512;
-  **buran's EPYC 7352 does not**, so that binary SIGILLs there. buran needs a separate
-  optionlist, not just a queue flag.
+- `rostam.cfg` compiles with `-mavx512f` and friends. medusa's Xeon 6148 has AVX-512.
+  buran's EPYC 7352 does not, and that binary gets `SIGILL` there. The buran optionlist
+  is `buran.cfg`. See the buran recipe below.
 - `srun` works here (unlike mel5) and binds ranks by default.
 - No slurm accounting enforcement: supply no allocation, and keep `--account` out of the
   submit script. A placeholder like `NO_ALLOCATION` is silently ignored and the job
@@ -150,6 +151,50 @@ sbatch -p medusa -N1 -n1 -c 20 -t 4:00:00 --wrap="cd $C && ./simfactory/bin/sim 
 # run -- num-threads=2, so --procs=32 is 16 ranks x 2 threads on one node
 cd $C && ./simfactory/bin/sim create-submit <name> --parfile=<par> --procs=32 --ppn-used=32 --walltime=<hh:mm:ss>
 ```
+
+### buran
+
+AMD EPYC 7352. `lscpu` on buran09 (2026-10-15): 2 sockets x 24 cores, 1 thread per
+core, 48 CPUs, no AVX-512 flag. `MemTotal` 263173852 kB. Slurm `RealMemory` is
+252909 MB. 16 nodes. `srun` binds ranks. No `--account`.
+
+`rostam.cfg` is AVX-512. A binary that executed `vmovapd %zmm0` (`gcc -O0 -mavx512f`)
+got `SIGILL` on buran09. The buran optionlist is `buran.cfg`: `-mavx2 -mfma`,
+`VERSION = buran-2026-10-15`, OpenMP on, same OpenMPI 4.0.6 tree under
+`/work/sbrandt/etk/externas-rostam`. A 2-rank MPI hello ran on buran09. UCX warns
+that the loaded `libucp` is 1.17 and the library wants >= 1.18, and `mlx5_0` does
+not initialise. The single-node smoke still finished. Multi-node buran is not verified.
+
+Machine entry `buran` (`buran.ini`): `ppn = 48`, `min-ppn = 1`, `num-smt = 1`,
+`max-num-threads = 48`, `makejobs = 16`, `queue = buran`, `memory = 252909`,
+`num-threads = 2` carried over from the medusa timing and not remeasured here.
+`aliaspattern = ^buran[0-9]+`. `hostname = buran00`, so a login-node `sim whoami`
+still resolves to `rostam`. Pass `--machine=buran`. Submit and run scripts are
+`buran.sub` and `buran.run` (`srun`, `--exclusive`, no `--account` line).
+
+Committed and pushed to `https://bitbucket.org/simfactory/simfactory2` master as `75ef81f0` (`Add the buran partition on rostam.`). The four files are `mdb/machines/buran.ini`, `mdb/optionlists/buran.cfg`, `mdb/submitscripts/buran.sub`, and `mdb/runscripts/buran.run`. HTTPS push to Bitbucket returns 410 because app passwords are retired. The push went over SSH from rostam: `git@bitbucket.org:simfactory/simfactory2.git`.
+
+`buran.cfg` sets `NSIMD_DIR = BUILD`. The prebuilt library in `externas-rostam` is Skylake 512-bit only, which is illegal on this CPU. `detect.sh` then builds SIMD CPU into the configuration scratch. The Funwave smoke did not include NSIMD, so that from-source build has not been run. The other prebuilt libraries under `/work/sbrandt/etk/externas-rostam` are unchanged, and `/work/sbrandt` is mode 700, so this optionlist builds for its owner.
+
+Verified on CactusFW3 (2026-10-15) before the NSIMD line was changed. The etk checkout is the one that was pushed. It has not been built.
+
+```bash
+ssh rostam
+C=/work/sbrandt/CactusFW3
+# build -- inside the queue, 16 cores. Produces exe/cactus_buran.
+sbatch -p buran -N1 -n1 -c 16 -t 4:00:00 --wrap="cd $C && ./simfactory/bin/sim build buran \
+  --machine=buran --optionlist=simfactory/mdb/optionlists/buran.cfg \
+  --thornlist=configs_input/ThornList"
+# run -- --procs is total threads. num-threads=2 makes --procs=4 into 2 ranks x 2 threads.
+cd $C && ./simfactory/bin/sim create-submit <name> --machine=buran --configuration=buran \
+  --parfile=<par> --procs=4 --num-threads=2 --ppn-used=4 --walltime=<hh:mm:ss>
+```
+
+Job 210715 built `exe/cactus_buran`. `CCTK_OPENMP_MODE = yes`, `ldd` links `libgomp.so.1`,
+and the stored `CFLAGS` are `-mavx2 -mfma`. Job 210717 (`buran-smoke2`, 2 ranks, 2 threads,
+buran09) printed `OpenMP is enabled`, reached iteration 1, and printed `Done.`
+`/work/sbrandt/tmp-buran-probe/smoke.par` is that one-iteration grid. The first submit,
+`buran-smoke`, aborted because `IOASCII` needs `CarpetSlab`. That was the parameter file.
 
 Pushing to Bitbucket from here: apply patches to a clone on rostam and push from there,
 then `git fetch rostam:<path> master` back to the workstation to realign hashes. The
