@@ -14,6 +14,34 @@
 - Use https://github.com/einsteintoolkit/brain to understand the Einstein Toolkit.
 - Compiling should be done inside a queue.
 - Use simfactory. If it does not work for a given machine, we should work together to ensure that it does.
+- **FIRST, ALWAYS: update simfactory to the latest master before doing any simfactory work,
+  in every tree you are about to use.** The mdb is shared and moves; a stale checkout will
+  have you debugging machine entries that were fixed upstream months ago.
+
+  ```bash
+  cd <cactus>/repos/simfactory2 && git fetch origin && git merge --ff-only origin/master
+  ```
+
+  If that refuses with "local changes would be overwritten", check whether the local mdb
+  edits are a stale copy of work that is now upstream before you keep them -- e.g.
+  `CactusFW3/repos/simfactory2` carries uncommitted mel5 edits that upstream already has.
+
+  How this bit on 2026-10-17: two Cactus trees (watannabe and melete05) both sat at
+  `97dc516`, **24 commits behind** `origin/master`. At that commit `mel5.ini` still
+  described melete05 as a machine with no batch system at all -- `submit = sh @SCRIPTFILE@ &`,
+  `getstatus = ps`, `stop = kill`, `ppn = 80`, `num-threads = 80` -- so `sim create-submit`
+  would have forked the job on the login node instead of submitting it, and defaulted to one
+  rank with 80 threads on a machine that caps a job at 12 cores. Upstream had already fixed
+  exactly this in `5ed3413` ("Make the mel5 configuration actually submit through slurm") and
+  `804766e` ("Make this a real simfactory build, with OpenMP actually on"), and had added
+  rostam (`aadc50e`) and buran (`75ef81f`) entries. Time was spent diagnosing "broken files in
+  the repo" that were not broken -- they were just old. A `git fetch` first would have cost
+  seconds.
+- **Do not mix `gmake` and simfactory in one tree.** A configuration created by
+  `gmake <cfg>-config` has no `properties.ini`, and `sim build <cfg>` then refuses it with
+  "Configuration <cfg> has no properties.ini file ... or the configuration has become
+  corrupted". The fix is `rm -rf configs/<cfg>` and let `sim build` create it. (Seen on
+  melete05, job 219.)
 - A machine config only counts as working when a clean `sim build` from the **committed**
   optionlist produces a usable executable and `sim create-submit` runs it -- with OpenMP
   on. Check `CCTK_OPENMP_MODE = yes` in `configs/<cfg>/config-data/make.config.defn`,
@@ -86,6 +114,92 @@ Single node, no cluster: `melete05.cct.lsu.edu` is both login and compute node.
 - Cactus tree: `/home/sbrandt/newrepos/boussinesx/CactusFW3`. Note `/home`, not `/work`.
 - Build inside the queue (`sbatch` a script that calls `sim build`); `makejobs = 12`
   matches the cap.
+
+### Prebuilt third-party libraries: /opt/etk  (do NOT rebuild these per user)
+
+`/opt/etk/ubuntu24-gcc13-ompi4` is a root-owned, world-readable tree built once on
+2026-10-17 so that nobody has to build these again:
+
+    ADIOS2  AMReX  BLAS  Boost  LAPACK  LORENE  NSIMD  Silo  openPMD  ssht     (2.3 GB)
+
+`mel5.cfg` points at them, so a CarpetX/AsterX/nuX thornlist now configures in seconds
+instead of spending ~15 minutes rebuilding 2.3 GB into `configs/<cfg>/scratch/external`
+-- per configuration, per user.  `/opt/etk/<tree>/README` carries the provenance.
+
+Ubuntu genuinely does not package ADIOS2, AMReX, openPMD, Silo, LORENE, NSIMD, ssht or a
+linkable Boost.  It *does* package BLAS and LAPACK (`libblas-dev`, `liblapack-dev`, netlib
+3.12.0 -- the same reference implementation); those two are in the tree only for a
+self-consistent stack, and using the system ones needs
+`BLAS_DIR = /usr/lib/x86_64-linux-gnu` spelled out, because `ExternalLibraries/BLAS`
+searches `/usr/lib` and `/usr/lib64` but not the multiarch directory.
+
+- The directory name records the toolchain the `.a` files are tied to: **gcc 13.3 and the
+  system OpenMPI 4.1.6**, which is what `mel5.cfg` selects and what `mel5.run` launches.
+  They are not compatible across either, so if the distro compiler or the default MPI
+  changes, build a *new* tree beside this one; do not overwrite it.
+- The libraries are **baseline x86-64**: they were built before `-march=broadwell` went
+  into `mel5.cfg`, so they carry no AVX2 (`objdump -d libamrex_3d.a | grep -c '%ymm'` is
+  0). That is safe -- only Cactus itself is compiled `-march=broadwell`. Rebuild the tree
+  if you want the libraries vectorised too.
+- They were built by the Cactus ExternalLibraries thorns themselves, so the layout is
+  exactly what those thorns expect. To refresh:
+
+  ```bash
+  # In a SCRATCH COPY of mel5.cfg set each of the ten to the literal string BUILD:
+  #     ADIOS2_DIR = BUILD    AMREX_DIR = BUILD    ... etc
+  # Do NOT simply delete the lines: Boost, BLAS and LAPACK would then be found under
+  # /usr and never built, leaving an incomplete tree -- and Boost found under /usr is
+  # exactly the "cannot find -lboost_filesystem" failure described below.
+  sim build <cfg> --optionlist=<scratch copy> --thornlist=<one activating all ten>
+
+  # /opt/etk is root-owned, so installing needs sudo:
+  sudo mkdir -p /opt/etk/<new-name>
+  sudo cp -a configs/<cfg>/scratch/external/. /opt/etk/<new-name>/
+  sudo chown -R root:root /opt/etk/<new-name>
+  sudo chmod -R a+rX /opt/etk/<new-name>
+
+  # Rewrite the builder's home out of the three files that bake it in, or
+  # pkg-config / find_package / libtool users get a nonexistent prefix:
+  sudo sed -i 's|<the builder .../scratch/external path>|/opt/etk/<new-name>|g' \
+    /opt/etk/<new-name>/openPMD/lib/pkgconfig/openPMD.pc \
+    /opt/etk/<new-name>/ADIOS2/lib/cmake/adios2/thirdparty/dill-config.cmake \
+    /opt/etk/<new-name>/Silo/lib/libsiloh5.la
+  ```
+- What is NOT here, deliberately: GSL, HDF5 (serial), MPI, hwloc, libjpeg, zlib, yaml-cpp
+  and FFTW3 all come from Ubuntu packages. **Boost does not** -- `libboost-dev` is headers
+  only and no `libboost_filesystem`/`libboost_system` runtime package is installed (only
+  date-time, regex and serialization), so the Boost thorn asks for `-lboost_filesystem`
+  the moment it sees headers under /usr and the link fails with
+  `cannot find -lboost_filesystem`. That is why Boost is in the prebuilt stack rather than
+  set to NO_BUILD. The prebuilt Boost is **1.55** -- the version bundled with the thorn,
+  older than the system 1.83 and ahead of it on the include path. Installing
+  `libboost-filesystem-dev` + `libboost-system-dev` (~2 MB) and setting `BOOST_DIR = /usr`
+  is the lighter alternative if that ever matters.
+
+Verified on 2026-10-17 (jobs 224/225): a clean `sim build` from the committed `mel5.cfg`
+with `configs/nux` deleted finished in 12 minutes with 0 errors and an empty
+`scratch/external`, all ten capability defns resolving to /opt/etk; `sim create-submit`
+then ran it through slurm with `OMP_NUM_THREADS=2`, no backtraces, and the thorn's own
+self-test passing.
+
+Two honest caveats on that verification:
+  * It is **link-level** for most of the stack. The acceptance run was a 2-second CarpetX
+    self-test, which exercised MPI and OpenMP; ADIOS2, openPMD, Silo, LORENE, ssht, BLAS,
+    LAPACK and Boost were linked but never called.
+  * It used **locally patched thorn sources**, not a pristine checkout: `BNSTools/RNSReader`
+    with the `ALL_UTILS` line disabled (see the next section) and `SpacetimeX/Cartoon2DX`
+    + `TestCartoon2DXVector` with uncommitted fixes. Anyone reproducing it from committed
+    sources alone will hit the RNSReader `utils` failure.
+
+### `sim build` builds `utils`; `gmake <config>` does not
+
+This is a real difference, not a detail. BNSTools/RNSReader declares
+`ALL_UTILS += RNS RNS_readID` in `src/make.configuration.defn` but ships neither `RNS.c`
+nor `RNS_readID.c` -- the utility rule builds `<util>.o` from `$(SRC_DIR)/<util>.c`, and
+those two files simply do not exist -- so `make utils` dies with
+`No rule to make target '<exe>/<config>/RNS', needed by 'utils'`.
+A plain `gmake <config>` never builds that target and so never notices. If a build
+succeeds under gmake and fails under simfactory at the very end, look here first.
 
 Verified recipe (2026-10-15):
 
