@@ -35,7 +35,7 @@ optuna==4.9.0
 packaging==26.2
 pathspec==1.1.1
 pdoc==16.0.0
-pillow==12.3.0
+pillow==13.0.0
 platformdirs==4.10.0
 py-cpuinfo==9.0.0
 Pygments==2.20.0
