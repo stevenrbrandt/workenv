@@ -54,15 +54,24 @@ if($#ARGV==1) {
 }
 my $fd = new FileHandle;
 open($fd,$file) or die "could not open file ($file)";
-my $max_num = 0;
-while(<$fd>) { $max_num++; }
-open($fd,$file) or die "could not open file ($file)";
+my @lines = <$fd>;
+close($fd);
+my $max_num = scalar @lines;
+# .md and .markdown use Markdown for the same beats the story tags encode.
+# A trailing .grok does not change that: .md.grok is Markdown, .txt.grok is not.
+# Other files keep the invented markup (# comments, <chapter>, <i>, ...).
+my $markup_name = defined($file) ? $file : "";
+$markup_name =~ s/\.grok\z//i;
+my $markdown = $markup_name =~ /\.(?:md|markdown)\z/i;
+my @rendered = $markdown ? render_markdown(@lines) : @lines;
 my $num = 0;
 my %shown = ();
-while(my $line = <$fd>) {
+while($num < $max_num) {
   $num++;
+  my $line = $rendered[$num-1];
+  next if(!defined($line));
   next if($line =~ /^\s*$/);
-  next if($line =~ /^\s*\#/);
+  next if(!$markdown && $line =~ /^\s*\#/);
   next if($line =~ /^\s*%/);
   next if($line =~ /^[\d\s]*$/);
   %shown = ();
@@ -152,4 +161,207 @@ sub firstword2
     }
     $firstword2 = $first;
   }
+}
+
+# Markdown, one source line in and one out, so last_line.txt stays valid.
+#   <!-- comment -->          skipped, same as a # comment line
+#   # Title                    <chapter="Title">
+#   ## Title (and deeper)     <scene="Title">
+#   ---  ***  * * *  ___      <scene>
+#   *text* and _text_         <i>text</i>
+#   > text                    block quote; the > markers are removed
+# A leading --- ... --- block of YAML keys is skipped.
+sub render_markdown
+{
+  my @lines = @_;
+  my @rendered;
+  my $inside_comment = 0;
+  my $front_end = markdown_front_matter_end(\@lines);
+  for my $i (0 .. $#lines) {
+    if($i <= $front_end) {
+      $rendered[$i] = undef;
+      next;
+    }
+    my $line = $lines[$i];
+    $line =~ s/\r\z//;
+    ($line, $inside_comment) = consume_html_comments($line, $inside_comment);
+    if($line =~ /^\s*$/) {
+      $rendered[$i] = undef;
+      next;
+    }
+    if(is_markdown_comment_line($line)) {
+      $rendered[$i] = undef;
+      next;
+    }
+    if(is_thematic_break($line)) {
+      $rendered[$i] = "<scene>\n";
+      next;
+    }
+    if(my ($marks, $title) = markdown_atx_heading($line)) {
+      $rendered[$i] = markdown_heading_tag($marks, $title);
+      next;
+    }
+    if(my $setext = markdown_setext_chapter(\@lines, \@rendered, $i, $line)) {
+      $rendered[$i] = $setext;
+      next;
+    }
+    my $quote = markdown_blockquote_body($line);
+    if(defined($quote)) {
+      $rendered[$i] = markdown_body_line($quote);
+      next;
+    }
+    $rendered[$i] = markdown_body_line($line);
+  }
+  return @rendered;
+}
+
+sub markdown_front_matter_end
+{
+  my $lines = shift;
+  return -1 if(@$lines == 0 || $lines->[0] !~ /^\s*---\s*$/);
+  for my $j (1 .. $#$lines) {
+    my $text = $lines->[$j];
+    return $j if($text =~ /^\s*---\s*$/);
+    next if($text =~ /^\s*$/);
+    next if($text =~ /^\s*#/);
+    next if($text =~ /^\s*[A-Za-z0-9_-]+\s*:/);
+    next if($text =~ /^\s*-\s+/);
+    next if($text =~ /^\s+/);
+    return -1;
+  }
+  return -1;
+}
+
+# Visible text with HTML comments removed. $inside is true while a
+# comment opened on an earlier line is still open.
+sub consume_html_comments
+{
+  my $line = shift;
+  my $inside = shift;
+  my $out = "";
+  while(1) {
+    if($inside) {
+      if($line =~ /^(.*?)\-\->(.*)$/s) {
+        $line = $2;
+        # Drop one shared space so "Before <!-- x --> after" stays one gap.
+        if($out =~ /[ \t]\z/ && $line =~ /^[ \t]/) {
+          $line =~ s/^[ \t]//;
+        }
+        $inside = 0;
+        next;
+      }
+      return ($out, 1);
+    }
+    if($line =~ /^(.*?)<!--(.*)$/s) {
+      $out .= $1;
+      $line = $2;
+      $inside = 1;
+      next;
+    }
+    return ($out . $line, 0);
+  }
+}
+
+sub is_markdown_comment_line
+{
+  my $line = shift;
+  return 1 if($line =~ /^\s*\[\/\/\]:\s*#/);
+  return 1 if($line =~ /^\s*\[[^\]]*\]:\s*#\s+\(/);
+  return 0;
+}
+
+sub is_thematic_break
+{
+  my $line = shift;
+  return 1 if($line =~ /^\s{0,3}(?:\*[ \t]*){3,}$/);
+  return 1 if($line =~ /^\s{0,3}(?:-[ \t]*){3,}$/);
+  return 1 if($line =~ /^\s{0,3}(?:_[ \t]*){3,}$/);
+  return 0;
+}
+
+# Returns (hashes, title) for an ATX heading, or an empty list.
+sub markdown_atx_heading
+{
+  my $line = shift;
+  return () unless($line =~ /^\s{0,3}(\#{1,6})[ \t]+(.*)$/);
+  my $marks = $1;
+  my $title = $2;
+  $title =~ s/[ \t]+\#+\s*$//;
+  $title =~ s/\s+$//;
+  return ($marks, $title);
+}
+
+sub markdown_heading_tag
+{
+  my $marks = shift;
+  my $title = shift;
+  my $plain = markdown_inline($title);
+  $plain =~ s/<[^>]*>//g;
+  $plain =~ s/^\s+|\s+$//g;
+  $plain =~ s/"/'/g;
+  my $kind = length($marks) == 1 ? "chapter" : "scene";
+  return "<$kind>\n" if($plain eq "");
+  return "<$kind=\"$plain\">\n";
+}
+
+# A line of === directly under a paragraph is a setext chapter title.
+# The title line is dropped so it is not also spoken as prose.
+sub markdown_setext_chapter
+{
+  my $lines = shift;
+  my $rendered = shift;
+  my $i = shift;
+  my $line = shift;
+  # Three or more = signs. A shorter line is not a title underline.
+  return undef if($i == 0 || $line !~ /^\s{0,3}(?:=[ \t]*){3,}$/);
+  return undef if(!defined($rendered->[$i-1]));
+  my $prev = $lines->[$i-1];
+  return undef if($prev =~ /^\s{0,3}(?:\#|>)/);
+  my $title = $rendered->[$i-1];
+  chomp $title;
+  $title =~ s/<[^>]*>//g;
+  $title =~ s/"/'/g;
+  $title =~ s/^\s+|\s+$//g;
+  $rendered->[$i-1] = undef;
+  return "<chapter>\n" if($title eq "");
+  return "<chapter=\"$title\">\n";
+}
+
+sub markdown_blockquote_body
+{
+  my $line = shift;
+  return undef unless($line =~ /^\s{0,3}>(.*)$/);
+  my $body = $1;
+  $body =~ s/^[ \t]//;
+  while($body =~ /^>(.*)$/) {
+    $body = $1;
+    $body =~ s/^[ \t]//;
+  }
+  return $body;
+}
+
+sub markdown_body_line
+{
+  my $text = shift;
+  $text = markdown_inline($text);
+  return undef if($text =~ /^\s*$/);
+  $text .= "\n" if($text !~ /\n\z/);
+  return $text;
+}
+
+sub markdown_inline
+{
+  my $text = shift;
+  # Hold escaped markers out of the emphasis scan, then put them back.
+  $text =~ s/\\\*/\x01/g;
+  $text =~ s/\\_/\x02/g;
+  $text =~ s/\*\*\*(.+?)\*\*\*/<i>$1<\/i>/g;
+  $text =~ s/___(.+?)___/<i>$1<\/i>/g;
+  $text =~ s/\*\*(.+?)\*\*/$1/g;
+  $text =~ s/__(.+?)__/$1/g;
+  $text =~ s/(?<![\w])\*(?!\s|\*)([^*\n]*?\S)\*(?![\w*])/<i>$1<\/i>/g;
+  $text =~ s/(?<![\w])_(?!\s)([^_\n]*?\S)_(?![\w])/<i>$1<\/i>/g;
+  $text =~ s/\x01/*/g;
+  $text =~ s/\x02/_/g;
+  return $text;
 }

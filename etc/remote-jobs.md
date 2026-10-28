@@ -9,6 +9,9 @@
 - Machines and queues can often be quirky and do things in bespoke ways.
 - Use of job watchers should not poll more than once a minute on remote machines.
 - Docker builds may be started on this machine or mel5
+- mike (`ssh mike`, `mike.hpc.lsu.edu`) can run jobs. SSH works, and the
+  Slurm account is `hpc_et_test` (QOS `normal`). Rostam is down as of
+  2026-10-28. Details are in the mike section below.
 
 ## Einstein Toolkit jobs
 - Use https://github.com/einsteintoolkit/brain to understand the Einstein Toolkit.
@@ -88,6 +91,25 @@ Two live examples of being fooled: jobs that ran `Funwave/test/hump_wide-1.par` 
 parfile's domain is 30/0.5 = 61 cells a side and cannot be split that many ways with 3
 ghost zones — and every one of them was reported `COMPLETED 0:0`. **Pick a test whose
 grid actually decomposes over the rank count you are testing.**
+
+## mike
+
+LSU HPC cluster. `ssh mike` lands on a login node (`mike1` on 2026-10-28).
+The ssh config host is `mike.hpc.lsu.edu`, user `sbrandt`. It is not tagged
+`# job runner` in `~/.ssh/config`.
+
+- Account `hpc_et_test`, QOS `normal`. `squeue -u sbrandt` was empty.
+- Default partition `single`: 171 nodes, 64 cores, 256000 MB, 7-day limit.
+  Also `checkpt` and `workq` (3 days), `bigmem` (4 nodes, about 2 TB),
+  `gpu` and `gpu4`.
+- Login CPU: 2x Intel Xeon Platinum 8358, 32 cores per socket, 64 cores.
+- Simfactory entry `mdb/machines/mike.ini` in the IMEX tree: queue `single`,
+  `ppn = 64`, `nodes = 1`, simulations under `/scratch/@USER@/simulations`,
+  option list `mike.cfg` with externals in
+  `/ddnA/project/sbrandt/externals-mike`. That ini still says
+  `allocation = NO_ALLOCATION`. The submit script passes
+  `--account=@ALLOCATION@`, so a create-submit would send the wrong account
+  until that field is `hpc_et_test`. Do not change it until a run is requested.
 
 ## melete05 ("mel5")
 
