@@ -4,6 +4,9 @@
     ch.py BOOKMARK
     ch.py -u URL
     ch.py -f FILE
+    ch.py -p BOOKMARK
+    ch.py -p -u URL
+    ch.py -p -f FILE
 
 FILE may sit on the WSL filesystem or under a Windows drive mount, and the
 name may contain spaces. Set CH_BROWSER to an executable path to override
@@ -89,8 +92,9 @@ WINDOWS_USERS = "/mnt/c/Users"
 
 
 def usage(file=sys.stdout):
-    print("Usage: ch.py [-f FILE] [-u URL] [BOOKMARK ...]", file=file)
+    print("Usage: ch.py [-p] [-f FILE] [-u URL] [BOOKMARK ...]", file=file)
     print(file=file)
+    print("  -p         print the link instead of opening it", file=file)
     print("  -f FILE    open a local file (WSL path or Windows path)", file=file)
     print("  -u URL     open a URL", file=file)
     print("  BOOKMARK   short name from the list below", file=file)
@@ -257,8 +261,16 @@ def main(argv):
     if not argv or "-h" in argv or "--help" in argv:
         usage()
         return 0
+    print_only = "-p" in argv
+    argv = [arg for arg in argv if arg != "-p"]
     try:
         targets = collect_targets(argv)
+        if print_only:
+            if not targets:
+                raise ValueError("-p needs a bookmark, URL, or file")
+            for target in targets:
+                print(target)
+            return 0
         browser = find_browser()
         if browser is None:
             print("No Chrome or Opera executable found under /mnt/c", file=sys.stderr)

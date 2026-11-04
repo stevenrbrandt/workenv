@@ -3,15 +3,15 @@
 - The home directory is frequently a poor choice for building and running jobs. The comment `# work dir: /work/sbrandt` will identify the one you should use.
 - These machines will be managed by slurm. Use sinfo to find available nodes.
 - Many of these machines are heterogeneous. That means that some queues will run on a different architecture, or have one or more GPUs. You may keep metadata on the various machines in md files in the ~/.ssh/machines directory.
-- Log in to machines once with ssh and sftp and keep the sessions open. Don't re-open per command or file transfer.
+- If a host's block in `~/.ssh/config` contains `ControlMaster`, check whether a master is already running before you log in or copy files. `ssh -O check HOST` exits 0 when the socket at `ControlPath` (`~/.ssh/cm-%r@%h:%p`) is alive. If it is not, start one with `ssh -fN HOST`. That first start may need a human for the login prompt. `ControlPersist` keeps it for 24 hours. After the master is up, further `ssh` and `scp` to that host reuse it and do not need a new login. Hosts that have this now: `stampede3`, `dtai`, and `rostam`.
 - You may need the help of a human to respond to prompts to login.
 - Use sinfo to find open queues.
 - Machines and queues can often be quirky and do things in bespoke ways.
 - Use of job watchers should not poll more than once a minute on remote machines.
 - Docker builds may be started on this machine or mel5
-- mike (`ssh mike`, `mike.hpc.lsu.edu`) can run jobs. SSH works, and the
-  Slurm account is `hpc_et_test` (QOS `normal`). Rostam is down as of
-  2026-10-28. Details are in the mike section below.
+- mike (`ssh mike`, `mike.hpc.lsu.edu`) is a job runner. Use it instead of
+  Rostam. The Slurm account is `hpc_et_test` (QOS `normal`). Rostam is down
+  as of 2026-10-28. Details are in the mike section below.
 
 ## Einstein Toolkit jobs
 - Use https://github.com/einsteintoolkit/brain to understand the Einstein Toolkit.
@@ -94,11 +94,12 @@ grid actually decomposes over the rank count you are testing.**
 
 ## mike
 
-LSU HPC cluster. `ssh mike` lands on a login node (`mike1` on 2026-10-28).
-The ssh config host is `mike.hpc.lsu.edu`, user `sbrandt`. It is not tagged
-`# job runner` in `~/.ssh/config`.
+LSU HPC cluster. Use mike instead of Rostam for IMEX runs. `ssh mike` lands
+on a login node (`mike1` on 2026-10-28). The ssh config host is
+`mike.hpc.lsu.edu`, user `sbrandt`, tagged `# job runner`.
 
-- Account `hpc_et_test`, QOS `normal`. `squeue -u sbrandt` was empty.
+- Account `hpc_et_test`, QOS `normal`. `squeue -u sbrandt` was empty when
+  this was checked.
 - Default partition `single`: 171 nodes, 64 cores, 256000 MB, 7-day limit.
   Also `checkpt` and `workq` (3 days), `bigmem` (4 nodes, about 2 TB),
   `gpu` and `gpu4`.
@@ -106,10 +107,10 @@ The ssh config host is `mike.hpc.lsu.edu`, user `sbrandt`. It is not tagged
 - Simfactory entry `mdb/machines/mike.ini` in the IMEX tree: queue `single`,
   `ppn = 64`, `nodes = 1`, simulations under `/scratch/@USER@/simulations`,
   option list `mike.cfg` with externals in
-  `/ddnA/project/sbrandt/externals-mike`. That ini still says
-  `allocation = NO_ALLOCATION`. The submit script passes
-  `--account=@ALLOCATION@`, so a create-submit would send the wrong account
-  until that field is `hpc_et_test`. Do not change it until a run is requested.
+  `/ddnA/project/sbrandt/externals-mike`. `allocation = hpc_et_test`. The
+  submit script passes `--account=@ALLOCATION@`. `etc/defs.local.ini`
+  `[default]` is also `hpc_et_test`. That value fills machine entries that
+  omit the key. `mel5.sub` does not pass `--account`.
 
 ## melete05 ("mel5")
 
