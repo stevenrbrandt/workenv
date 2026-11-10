@@ -1,6 +1,6 @@
 # Running jobs remotely
 - You have a number of machines available on which to run remote jobs. You can find them in ~/.ssh/config tagged with a comment `# job runner`.
-- The home directory is frequently a poor choice for building and running jobs. The comment `# work dir: /work/sbrandt` will identify the one you should use.
+- The home directory is frequently a poor choice for building and running jobs. The comment `# work dir: /work/sbrandt` in ~/.ssh/config will identify the one you should use.
 - These machines will be managed by slurm. Use sinfo to find available nodes.
 - Many of these machines are heterogeneous. That means that some queues will run on a different architecture, or have one or more GPUs. You may keep metadata on the various machines in md files in the ~/.ssh/machines directory.
 - If a host's block in `~/.ssh/config` contains `ControlMaster`, check whether a master is already running before you log in or copy files. `ssh -O check HOST` exits 0 when the socket at `ControlPath` (`~/.ssh/cm-%r@%h:%p`) is alive. If it is not, start one with `ssh -fN HOST`. That first start may need a human for the login prompt. `ControlPersist` keeps it for 24 hours. After the master is up, further `ssh` and `scp` to that host reuse it and do not need a new login. Hosts that have this now: `stampede3`, `dtai`, and `rostam`.
@@ -9,9 +9,7 @@
 - Machines and queues can often be quirky and do things in bespoke ways.
 - Use of job watchers should not poll more than once a minute on remote machines.
 - Docker builds may be started on this machine or mel5
-- mike (`ssh mike`, `mike.hpc.lsu.edu`) is a job runner. Use it instead of
-  Rostam. The Slurm account is `hpc_et_test` (QOS `normal`). Rostam is down
-  as of 2026-10-28. Details are in the mike section below.
+- Rostam is available for use again
 
 ## Einstein Toolkit jobs
 - Use https://github.com/einsteintoolkit/brain to understand the Einstein Toolkit.

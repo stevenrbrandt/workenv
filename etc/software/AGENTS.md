@@ -24,6 +24,7 @@ They synthesize: Robert C. Martin *Clean Code* (incl. 2nd ed.), Hunt & Thomas *T
 - `03-design.md` — SOLID pragmatically, cohesion/coupling, encapsulation, dependencies.
 - `04-verifiability.md` — Testing as safety net, error handling, no silent failures.
 - `05-workflow.md` — Small changes, code review mindset, consistency, docs.
+- '06-goodcode.md' — What good code (our goal) looks like.
 
 ## The 10-rule quick check (if you read nothing else)
 
