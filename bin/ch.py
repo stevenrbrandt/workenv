@@ -76,6 +76,7 @@ BOOKMARKS = {
     "wof": ("http://stevenrbrandt.com/worldsof/", ""),
     "wp": ("http://stevenrbrandt.com/wordpress/wp-admin", ""),
     "zoom": ("https://lsu.zoom.us/my/steverbrandt", ""),
+    "max": ("https://scholar.google.com/citations?hl=en&user=YmfiJ7sAAAAJ", ""),
 }
 
 CHROME_X86 = "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe"
